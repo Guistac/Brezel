@@ -1,31 +1,42 @@
-#include <iostream>
+#include "framework/app/Application.hpp"
+#include "framework/core/Project.hpp"
+#include "framework/commands/PropertyCommand.hpp"
+#include "framework/core/Object.hpp"
 #include <spdlog/spdlog.h>
-#include <entt/entt.hpp>
-#include <pugixml.hpp>
 
-// Your "Day 1" Foundation
-struct TagComponent {
-    std::string name;
+struct MotorComponent {
+    Parameter<float> speed;
+    MotorComponent(CommandStack* stack) : speed("speed", 0.0f, stack) {}
 };
 
 int main() {
-    // 1. Test Logging
-    spdlog::info("Starting Realtime Framework...");
+    auto& app = Application::instance();
+    Project* proj = app.createProject("MySystem");
+    Object motor = proj->createObject("Motor_1");
+    auto& comp = motor.add<MotorComponent>();
 
-    // 2. Test EnTT (ECS)
-    entt::registry registry;
-    auto entity = registry.create();
-    registry.emplace<TagComponent>(entity, "MainProcessor");
+    // --- SIGNAL EXAMPLE ---
+    // We connect a "lambda" function to the speed change signal.
+    // This could be a GUI update, a safety check, or a logger.
+    comp.speed.onChange.connect([](const float& newSpeed) {
+        if (newSpeed > 80.0f) {
+            spdlog::warn("SAFETY: High speed detected! Current: {} units", newSpeed);
+        } else {
+            spdlog::info("Telemetry: Speed updated to {}", newSpeed);
+        }
+    });
 
-    auto& tag = registry.get<TagComponent>(entity);
-    spdlog::info("Created Entity with Tag: {}", tag.name);
+    // --- TEST EXECUTION ---
+    spdlog::info("Setting speed to 50...");
+    comp.speed.set(50.0f); // Fires Signal (Info)
 
-    // 3. Test Pugixml
-    pugi::xml_document doc;
-    auto root = doc.append_child("Project");
-    root.append_attribute("version") = "1.0";
+    spdlog::info("Setting speed to 95...");
+    comp.speed.set(95.0f); // Fires Signal (Warning!)
+
+    spdlog::info("Performing Undo...");
+    proj->getStack().undo(); // Reverts to 50, Fires Signal (Info)
     
-    spdlog::info("Framework Skeleton Initialized Successfully.");
+    spdlog::info("Final Speed: {}", comp.speed.get());
 
     return 0;
 }
