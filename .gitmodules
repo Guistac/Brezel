@@ -1,0 +1,12 @@
+[submodule "extern/entt"]
+	path = extern/entt
+	url = https://github.com/skypjack/entt.git
+[submodule "extern/spdlog"]
+	path = extern/spdlog
+	url = https://github.com/gabime/spdlog.git
+[submodule "extern.pugixml"]
+	path = extern.pugixml
+	url = https://github.com/zeux/pugixml
+[submodule "extern/pugixml"]
+	path = extern/pugixml
+	url = https://github.com/zeux/pugixml
