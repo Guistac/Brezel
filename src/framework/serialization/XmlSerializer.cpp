@@ -1,6 +1,7 @@
 #include "framework/serialization/XmlSerializer.hpp"
 #include "framework/serialization/ComponentRegistry.hpp"
 #include "framework/core/Hierarchy.hpp"
+#include "framework/core/Project.hpp"
 
 bool XmlSerializer::save(Project& project, std::string_view filepath) {
     pugi::xml_document doc;
@@ -23,7 +24,7 @@ void XmlSerializer::serializeObject(entt::registry& reg, entt::entity entity, pu
     node.append_attribute("name") = reg.get<NameComponent>(entity).name.c_str();
 
     // Ask the Registry to save any components it finds on this entity
-    for (const auto& type : ComponentRegistry::instance().getTypes()) {
+    for (const auto& type : ComponentRegistry::getTypes()) {
         type.save(entity, reg, node);
     }
 
@@ -53,7 +54,7 @@ void XmlSerializer::deserializeObject(entt::registry& reg, pugi::xml_node& node,
     hier.parent = parent;
     // ... add to parent's children list logic here ...
 
-    for (const auto& type : ComponentRegistry::instance().getTypes()) {
+    for (const auto& type : ComponentRegistry::getTypes()) {
         type.load(entity, reg, node);
     }
 

@@ -2,6 +2,7 @@
 #include <entt/entt.hpp>
 #include "framework/core/Hierarchy.hpp"
 #include "framework/serialization/ComponentRegistry.hpp"
+#include "framework/commands/CommandStackVisitor.hpp"
 
 class Object {
 public:
@@ -23,7 +24,8 @@ public:
         // Automatically wire the component if it derives from BaseComponent
         if constexpr (std::is_base_of_v<BaseComponent, T>) {
             component.undoStack = stack;
-            component.wireParameters(stack);
+            CommandStackVisitor visitor(stack);
+            component.reflect(visitor);
         }
 
         return component;
