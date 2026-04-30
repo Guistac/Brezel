@@ -8,13 +8,18 @@ class ParameterBase {
 public:
     virtual ~ParameterBase() = default;
     virtual std::string_view name() const = 0;
+
+    // These allow the serializer to get/set values as strings
+    virtual std::string toString() const = 0;
+    virtual void fromString(const std::string& value) = 0;
+    virtual void setCommandStack(CommandStack* stack) = 0;
 };
 
 template<typename T>
 class Parameter : public ParameterBase {
 public:
-    Parameter(std::string_view name, T defaultValue, CommandStack* stack = nullptr) 
-        : m_name(name), m_value(defaultValue), m_stack(stack) {}
+    Parameter(std::string_view name, T defaultValue)
+        : m_name(name), m_value(defaultValue), m_stack(nullptr) {}
 
     const T& get() const { return m_value; }
 
@@ -31,7 +36,18 @@ public:
 
     std::string_view name() const override { return m_name; }
     
-    void setCommandStack(CommandStack* stack) { m_stack = stack; }
+    std::string toString() const override {
+        if constexpr (std::is_same_v<T, float>) return std::to_string(m_value);
+        if constexpr (std::is_same_v<T, std::string>) return m_value;
+        // Add more types as needed
+    }
+
+    void fromString(const std::string& value) override {
+        if constexpr (std::is_same_v<T, float>) setDirect(std::stof(value));
+        if constexpr (std::is_same_v<T, std::string>) setDirect(value);
+    }
+
+    void setCommandStack(CommandStack* stack) override { m_stack = stack; }
 
     Signal<const T&> onChange;
 

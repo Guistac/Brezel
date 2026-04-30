@@ -1,6 +1,7 @@
 #pragma once
 #include <entt/entt.hpp>
 #include "framework/core/Hierarchy.hpp"
+#include "framework/serialization/ComponentRegistry.hpp"
 
 class Object {
 public:
@@ -16,13 +17,16 @@ public:
     // Helper to add components easily
     template<typename T, typename... Args>
     T& add(Args&&... args) {
-        // If the component T can be constructed with a CommandStack* // as the first argument, we fetch it from the registry context.
-        if constexpr (std::is_constructible_v<T, CommandStack*, Args...>) {
-            auto* stack = m_registry->ctx().get<CommandStack*>();
-            return m_registry->emplace<T>(m_entity, stack, std::forward<Args>(args)...);
-        } else {
-            return m_registry->emplace<T>(m_entity, std::forward<Args>(args)...);
+        T& component = m_registry->emplace<T>(m_entity, std::forward<Args>(args)...);
+        auto* stack = m_registry->ctx().get<CommandStack*>();
+
+        // Automatically wire the component if it derives from BaseComponent
+        if constexpr (std::is_base_of_v<BaseComponent, T>) {
+            component.undoStack = stack;
+            component.wireParameters(stack);
         }
+
+        return component;
     }
 
     // Helper to get components
@@ -33,6 +37,14 @@ public:
 
     bool isValid() const { 
         return m_entity != entt::null && m_registry->valid(m_entity); 
+    }
+
+    void setParent(Object& parent) {
+        auto& myHier = get<HierarchyComponent>();
+        auto& parentHier = parent.get<HierarchyComponent>();
+
+        myHier.parent = parent.id();
+        parentHier.children.push_back(m_entity);
     }
 
 private:

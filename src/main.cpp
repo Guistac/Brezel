@@ -1,42 +1,51 @@
 #include "framework/app/Application.hpp"
 #include "framework/core/Project.hpp"
 #include "framework/commands/PropertyCommand.hpp"
-#include "framework/core/Object.hpp"
+#include "framework/serialization/XmlSerializer.hpp"
+#include "framework/serialization/ComponentRegistry.hpp"
+
 #include <spdlog/spdlog.h>
 
-struct MotorComponent {
-    Parameter<float> speed;
-    MotorComponent(CommandStack* stack) : speed("speed", 0.0f, stack) {}
+struct Motor : BaseComponent {
+    COMPONENT_IDENTITY("Motor")
+    
+    Parameter<float> speed  {"speed", 0.0f};
+    Parameter<float> torque {"torque", 10.0f};
+    
+
+/*
+    void reflect(Visitor& v) {
+        v.visit_property("speed",   speed,  {Tag::Persistent});
+        v.visit_property("torque",  torque, {Tag::Persistent});
+    }
+*/
+    
+    REFLECT_PARAMS(speed, torque)
 };
 
 int main() {
+    ComponentRegistry::instance().registerComponent<Motor>();
+
     auto& app = Application::instance();
-    Project* proj = app.createProject("MySystem");
-    Object motor = proj->createObject("Motor_1");
-    auto& comp = motor.add<MotorComponent>();
+    Project* proj = app.createProject("Factory_Alpha");
 
-    // --- SIGNAL EXAMPLE ---
-    // We connect a "lambda" function to the speed change signal.
-    // This could be a GUI update, a safety check, or a logger.
-    comp.speed.onChange.connect([](const float& newSpeed) {
-        if (newSpeed > 80.0f) {
-            spdlog::warn("SAFETY: High speed detected! Current: {} units", newSpeed);
-        } else {
-            spdlog::info("Telemetry: Speed updated to {}", newSpeed);
-        }
+    Object motorObj = proj->createObject("MainConveyorMotor");
+    auto& motor = motorObj.add<Motor>();
+
+    motor.speed.onChange.connect([](const float& newSpeed) {
+        spdlog::info("Speed updated to {}", newSpeed);
     });
+    motor.speed.set(45.5f);
+    proj->getStack().undo();
 
-    // --- TEST EXECUTION ---
-    spdlog::info("Setting speed to 50...");
-    comp.speed.set(50.0f); // Fires Signal (Info)
+    if (XmlSerializer::save(*proj, "project_alpha.xml")) {
+        spdlog::info("Successfully saved project to XML!");
+    }
 
-    spdlog::info("Setting speed to 95...");
-    comp.speed.set(95.0f); // Fires Signal (Warning!)
-
-    spdlog::info("Performing Undo...");
-    proj->getStack().undo(); // Reverts to 50, Fires Signal (Info)
-    
-    spdlog::info("Final Speed: {}", comp.speed.get());
+    Project* loadedProj = app.createProject("Loaded");
+    if(XmlSerializer::load(*loadedProj, "project_alpha.xml")){
+        spdlog::info("Successfully loaded project from XML!");
+    }
 
     return 0;
 }
