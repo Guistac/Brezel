@@ -6,20 +6,15 @@
 
 class Object {
 public:
-    Object(entt::entity entity, entt::registry* registry)
-        : m_entity(entity), m_registry(registry) {}
-
-    entt::entity id() const { return m_entity; }
-
-    std::string_view name() const {
-        return m_registry->get<NameComponent>(m_entity).name;
-    }
+    Object(entt::entity entity, entt::registry& registry) : m_handle(registry, entity){}
+    Object(entt::handle handle) : m_handle(handle){}
+    Object(entt::registry& registry) : m_handle(registry, entt::null){}
 
     // Helper to add components easily
     template<typename T, typename... Args>
     T& add(Args&&... args) {
-        T& component = m_registry->emplace<T>(m_entity, std::forward<Args>(args)...);
-        auto* stack = m_registry->ctx().get<CommandStack*>();
+        T& component = m_handle.emplace<T>(std::forward<Args>(args)...);
+        auto* stack = m_handle.registry()->ctx().get<CommandStack*>();
 
         // Automatically wire the component if it derives from BaseComponent
         if constexpr (std::is_base_of_v<BaseComponent, T>) {
@@ -31,25 +26,44 @@ public:
         return component;
     }
 
-    // Helper to get components
     template<typename T>
-    T& get() {
-        return m_registry->get<T>(m_entity);
-    }
+    bool has() const { return m_handle.try_get<T>(); }
 
-    bool isValid() const { 
-        return m_entity != entt::null && m_registry->valid(m_entity); 
-    }
+    template<typename T>
+    T& get() const { return m_handle.get<T>(); }
+
+    entt::handle handle() const { return m_handle; }
+    entt::registry& registry() const { return *m_handle.registry(); }
+    bool isValid() const {  return m_handle.valid(); }
+    operator bool() const { return m_handle.valid(); }
 
     void setParent(Object& parent) {
         auto& myHier = get<HierarchyComponent>();
         auto& parentHier = parent.get<HierarchyComponent>();
 
-        myHier.parent = parent.id();
-        parentHier.children.push_back(m_entity);
+        myHier.parent = parent.handle().entity();
+        parentHier.children.push_back(m_handle.entity());
+    }
+
+    void reflect(EntityVisitor& visitor){
+        visitor.beginEntity();
+        if(auto* name = m_handle.try_get<NameComponent>()){
+            visitor.visit_property("Name", name->name);
+        }
+        ComponentRegistry::reflectEntityComponents(m_handle, visitor);
+        if(auto* hierachy = m_handle.try_get<HierarchyComponent>()){
+            visitor.beginEntityChildren();
+            for(auto childEntity : hierachy->children){
+                Object child(childEntity, *m_handle.registry());
+                if(child.isValid()){
+                    child.reflect(visitor);
+                }
+            }
+            visitor.endEntityChildren();
+        }
+        visitor.endEntity();
     }
 
 private:
-    entt::entity m_entity;
-    entt::registry* m_registry;
+    entt::handle m_handle;
 };

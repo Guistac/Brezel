@@ -26,6 +26,10 @@ int main() {
     Object motorObj = proj->createObject("Motor");
     auto& motor = motorObj.add<Motor>();
 
+    Object motorObjChild = proj->createObject("Motor 2");
+    motorObjChild.setParent(motorObj);
+    motorObjChild.add<Motor>();
+
     motor.speed.onChange.connect([](const float& newSpeed) {
         spdlog::info("Speed updated to {}", newSpeed);
     });

@@ -6,6 +6,7 @@
 #include "framework/commands/CommandStack.hpp"
 #include "framework/core/Object.hpp"
 
+
 class Project {
 public:
     Project(std::string_view name) 
@@ -29,14 +30,32 @@ public:
         m_registry.emplace<NameComponent>(entity, std::string(name));
         m_registry.emplace<HierarchyComponent>(entity);
         
-        return Object(entity, &m_registry);
+        return Object(entity, m_registry);
+    }
+
+    Object createEmptyObject(){
+        auto entity = m_registry.create();
+        return Object(entity, m_registry);
     }
     
     // Optional: A helper to destroy objects safely
     void destroyObject(Object& obj) {
-        if (m_registry.valid(obj.id())) {
-            m_registry.destroy(obj.id());
+        if(obj.isValid()){
+            m_registry.destroy(obj.handle().entity());
         }
+    }
+
+    void reflect(ProjectVisitor& visitor){
+        visitor.beginProject();
+        visitor.visit_property("Name", m_name);
+        auto view = m_registry.view<HierarchyComponent>();
+        for(auto entity : view) {
+            if(view.get<HierarchyComponent>(entity).parent == entt::null) {
+                Object object(entity, m_registry);
+                object.reflect(visitor);
+            }
+        }
+        visitor.endProject();
     }
 
 private:

@@ -5,34 +5,9 @@
 
 bool XmlSerializer::save(Project& project, std::string_view filepath) {
     pugi::xml_document doc;
-    auto root = doc.append_child("Project");
-    root.append_attribute("name") = project.getName().data();
-
-    auto& reg = project.getRegistry();
-    auto view = reg.view<HierarchyComponent>();
-    
-    for(auto entity : view) {
-        if(view.get<HierarchyComponent>(entity).parent == entt::null) {
-            serializeObject(reg, entity, root);
-        }
-    }
+    XmlProjectVisitor visitor(project, doc);
+    project.reflect(visitor);
     return doc.save_file(filepath.data());
-}
-
-void XmlSerializer::serializeObject(entt::registry& reg, entt::entity entity, pugi::xml_node& parentXml) {
-    auto node = parentXml.append_child("Object");
-    node.append_attribute("name") = reg.get<NameComponent>(entity).name.c_str();
-
-    // Ask the Registry to save any components it finds on this entity
-    for (const auto& type : ComponentRegistry::getTypes()) {
-        type.save(entity, reg, node);
-    }
-
-    // Recurse Children
-    auto& hier = reg.get<HierarchyComponent>(entity);
-    for (auto child : hier.children) {
-        serializeObject(reg, child, node);
-    }
 }
 
 bool XmlSerializer::load(Project& project, std::string_view filepath) {
@@ -41,24 +16,31 @@ bool XmlSerializer::load(Project& project, std::string_view filepath) {
 
     auto root = doc.child("Project");
     for (auto node : root.children("Object")) {
-        deserializeObject(project.getRegistry(), node, entt::null);
+        deserializeObject(project, node);
     }
     return true;
 }
 
-void XmlSerializer::deserializeObject(entt::registry& reg, pugi::xml_node& node, entt::entity parent) {
-    auto entity = reg.create();
-    reg.emplace<NameComponent>(entity, node.attribute("name").as_string());
-    
-    auto& hier = reg.emplace<HierarchyComponent>(entity);
-    hier.parent = parent;
-    // ... add to parent's children list logic here ...
 
-    for (const auto& type : ComponentRegistry::getTypes()) {
-        type.load(entity, reg, node);
-    }
 
-    for (auto childNode : node.children("Object")) {
-        deserializeObject(reg, childNode, entity);
+void XmlSerializer::deserializeObject(Project& project, pugi::xml_node& node) {
+    Object obj = project.createObject("");
+
+    XmlLoadVisitor visitor(node, &project.getStack());
+    ComponentRegistry::reflectEntityComponents(obj.handle(), visitor);
+
+    for (auto childNode : node.children()) {
+        std::string_view nodeName = childNode.name();
+        if(nodeName == "Children"){
+            for(auto childObjectNode : childNode.children("Object")){
+                deserializeObject(project, childObjectNode);
+            }
+        }
+        else{
+            if(const auto* info = ComponentRegistry::findInfoBySaveName(nodeName)){
+                info->createComponent(obj.handle());
+                info->reflect(obj.handle(), visitor);
+            }
+        }
     }
 }

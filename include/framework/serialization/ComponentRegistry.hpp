@@ -15,45 +15,50 @@ struct BaseComponent {
 namespace ComponentRegistry{
 
     struct ComponentTypeInfo {
-        std::string name;
-        // Function pointers for generic save/load
-        std::function<void(entt::entity, entt::registry&, pugi::xml_node&)> save;
-        std::function<void(entt::entity, entt::registry&, pugi::xml_node&)> load;
+        std::string saveString;
+        std::function<void(entt::handle, ComponentVisitor&)> reflect;
+        std::function<void(entt::handle)> createComponent;
     };
 
-    inline std::vector<ComponentTypeInfo> m_types;
-    inline const std::vector<ComponentTypeInfo>& getTypes() { return m_types; }
+    inline std::unordered_map<entt::id_type, ComponentTypeInfo> componentInfoById;
 
     template<typename T>
-    void registerComponent(const std::string& saveName){
+    void registerComponent(const std::string& saveString){
         ComponentTypeInfo info;
-        
-        // This works now because T (e.g., MotorComponent) 
-        // has the static xml_name from the macro.
-        //info.name = T::xml_name; 
-        info.name = saveName;
-
-        info.save = [saveName](entt::entity e, entt::registry& reg, pugi::xml_node& node) {
-            if (auto* comp = reg.try_get<T>(e)) {
-                auto compNode = node.append_child(saveName);
-                XmlSaveVisitor saver(compNode);
-                comp->reflect(saver);
+        info.saveString = saveString;
+        info.reflect = [](entt::handle handle, ComponentVisitor& visitor){
+            if(auto* component = handle.try_get<T>()){
+                component->reflect(visitor);
             }
         };
-
-        info.load = [saveName](entt::entity e, entt::registry& reg, pugi::xml_node& node) {
-            if (auto compNode = node.child(saveName)) {
-                auto& comp = reg.emplace<T>(e);
-                auto* stack = reg.ctx().get<CommandStack*>();
-                
-                if constexpr (std::is_base_of_v<BaseComponent, T>) {
-                    comp.undoStack = stack;
-                }
-                XmlLoadVisitor loader(compNode, stack);
-                comp.reflect(loader);
-            }
+        info.createComponent = [](entt::handle handle){
+            auto& component = handle.get_or_emplace<T>();
         };
-
-        m_types.push_back(info);
+        entt::id_type componentId = entt::type_id<T>().hash();
+        componentInfoById[componentId] = info;
     };
+
+
+    inline void reflectEntityComponents(entt::handle handle, ComponentVisitor& visitor) {
+        auto& reg = *handle.registry();
+        auto entity = handle.entity();
+        for(auto [componentId, storage] : reg.storage()) {
+            if(storage.contains(entity) && componentInfoById.contains(componentId)) {
+                const ComponentTypeInfo& info = componentInfoById.at(componentId);
+                visitor.beginComponent(info.saveString.c_str());
+                info.reflect(handle, visitor);
+                visitor.endComponent();
+            }
+        }
+    }
+
+    inline const ComponentTypeInfo* findInfoBySaveName(std::string_view name) {
+        for (auto& [id, info] : componentInfoById) {
+            if (info.saveString == name) {
+                return &info;
+            }
+        }
+        return nullptr;
+    }
+
 }
