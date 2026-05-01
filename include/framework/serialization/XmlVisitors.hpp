@@ -8,8 +8,8 @@
 class Project;
 
 
-struct XmlProjectVisitor : public ProjectVisitor {
-    XmlProjectVisitor(const Project& project, pugi::xml_node& root) { nodeStack.push(root); }
+struct ProjectXmlSaveVisitor : public ProjectVisitor {
+    ProjectXmlSaveVisitor(const Project& project, pugi::xml_node& root) { nodeStack.push(root); }
 
     bool isPersistent(std::initializer_list<Tag> tags) {
         for (auto t : tags) if (t == Tag::Persistent) return true;
@@ -54,16 +54,29 @@ private:
 };
 
 
+struct ComponentXmlLoadVisitor : public ComponentVisitor{
+public:
+    ComponentXmlLoadVisitor(pugi::xml_node& root) : xmlNode(root) {}
 
-struct XmlLoadVisitor : public ComponentVisitor {
-    pugi::xml_node& node;
-    CommandStack* stack;
-    XmlLoadVisitor(pugi::xml_node& n, CommandStack* s) : node(n), stack(s) {}
+    bool isPersistent(std::initializer_list<Tag> tags) {
+        for (auto t : tags) if (t == Tag::Persistent) return true;
+        return false;
+    }
 
-    void visit_property(const char* label, ParameterBase& p, std::initializer_list<Tag> tags) override {
-        p.setCommandStack(stack); // Inject undo/redo support
-        if (auto attr = node.attribute(label)) {
+    virtual void visit_property(const char* label, ParameterBase& p, std::initializer_list<Tag> tags) override {
+        if (auto attr = xmlNode.attribute(label)) {
             p.fromString(attr.value());
         }
     }
+    virtual void visit_property(const char* label, std::string& str, std::initializer_list<Tag> tags) override{
+        if (auto attr = xmlNode.attribute(label)) {
+            str = attr.value();
+        }
+    };
+
+    virtual void beginComponent(const char* componentName) override {}
+    virtual void endComponent() override {}
+    
+private:
+    pugi::xml_node xmlNode;
 };

@@ -58,8 +58,9 @@ public:
         visitor.endProject();
     }
 
-private:
+
     std::string     m_name;
+private:
     entt::registry  m_registry;
     CommandStack    m_commandStack;
 };
