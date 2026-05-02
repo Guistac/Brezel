@@ -32,7 +32,7 @@ struct ProjectXmlSaveVisitor : public ProjectVisitor {
     virtual void endComponent() override { nodeStack.pop(); }
 
     virtual void beginEntity() override {
-        auto newNode = nodeStack.top().append_child("Object");
+        auto newNode = nodeStack.top().append_child("Entity");
         nodeStack.push(newNode);
     }
     virtual void endEntity() override { nodeStack.pop(); }

@@ -21,33 +21,33 @@ bool XmlSerializer::load(Project& project, std::string_view filepath) {
         project.m_name = attr.value();
     }
 
-    for(auto childObjectXml : projectXml.children("Object")){
-        deserializeObject(project, childObjectXml);
+    for(auto childEntityXml : projectXml.children("Entity")){
+        deserializeEntity(project, childEntityXml);
     }
 
     return true;
 }
 
-void XmlSerializer::deserializeObject(Project& project, pugi::xml_node& objectXml) {
-    std::string objectName = "";
-    if(auto attr = objectXml.attribute("Name")){
-        objectName = attr.value();
+void XmlSerializer::deserializeEntity(Project& project, pugi::xml_node& entityXml) {
+    std::string name = "";
+    if(auto attr = entityXml.attribute("Name")){
+        name = attr.value();
     }
-    Object object = project.createObject(objectName);
+    Entity entity = project.createEntity(name);
 
-    ComponentXmlLoadVisitor visitor(objectXml);
+    ComponentXmlLoadVisitor visitor(entityXml);
 
-    for (auto childXml : objectXml.children()) {
+    for (auto childXml : entityXml.children()) {
         std::string_view xmlName = childXml.name();
         if(xmlName == "Children"){
-            for(auto childObjectNode : childXml.children("Object")){
-                deserializeObject(project, childObjectNode);
+            for(auto childEntitytXml : childXml.children("Entity")){
+                deserializeEntity(project, childEntitytXml);
             }
         }
         else{
             if(const auto* info = ComponentRegistry::findInfoBySaveName(xmlName)){
-                info->createComponent(object.handle());
-                info->reflect(object.handle(), visitor);
+                info->createComponent(entity.handle());
+                info->reflect(entity.handle(), visitor);
             }
         }
     }

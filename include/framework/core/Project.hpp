@@ -4,7 +4,7 @@
 #include <memory>
 
 #include "framework/commands/CommandStack.hpp"
-#include "framework/core/Object.hpp"
+#include "framework/core/Entity.hpp"
 
 
 class Project {
@@ -23,25 +23,20 @@ public:
     CommandStack&    getStack()      { return m_commandStack; }
 
     // The Project is now the Factory
-    Object createObject(std::string_view name) {
+    Entity createEntity(std::string_view name) {
         auto entity = m_registry.create();
         
         // Enforce your invariants (Name and Hierarchy)
         m_registry.emplace<NameComponent>(entity, std::string(name));
         m_registry.emplace<HierarchyComponent>(entity);
         
-        return Object(entity, m_registry);
-    }
-
-    Object createEmptyObject(){
-        auto entity = m_registry.create();
-        return Object(entity, m_registry);
+        return Entity(entity, m_registry);
     }
     
-    // Optional: A helper to destroy objects safely
-    void destroyObject(Object& obj) {
-        if(obj.isValid()){
-            m_registry.destroy(obj.handle().entity());
+    // Optional: A helper to destroy entities safely
+    void destroyEntity(Entity& ent) {
+        if(ent.isValid()){
+            m_registry.destroy(ent.handle().entity());
         }
     }
 
@@ -51,8 +46,8 @@ public:
         auto view = m_registry.view<HierarchyComponent>();
         for(auto entity : view) {
             if(view.get<HierarchyComponent>(entity).parent == entt::null) {
-                Object object(entity, m_registry);
-                object.reflect(visitor);
+                Entity ent(entity, m_registry);
+                ent.reflect(visitor);
             }
         }
         visitor.endProject();

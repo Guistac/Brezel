@@ -24,11 +24,11 @@ struct TestComponent : BaseComponent{
     std::string hoho = "hoho";
     std::string huhu = "huhu";
     virtual void reflect(ComponentVisitor& v) override {
-        v.visit_property("haha",   haha,  {Tag::Persistent, Tag::CommandStack});
-        v.visit_property("hehe",   hehe,  {Tag::Persistent, Tag::CommandStack});
-        v.visit_property("hihi",   hihi,  {Tag::Persistent, Tag::CommandStack});
-        v.visit_property("hoho",   hoho,  {Tag::Persistent, Tag::CommandStack});
-        v.visit_property("huhu",   huhu,  {Tag::Persistent, Tag::CommandStack});
+        v.visit_property("haha",   haha, {Tag::Persistent});
+        v.visit_property("hehe",   hehe, {Tag::Persistent});
+        v.visit_property("hihi",   hihi, {Tag::Persistent});
+        v.visit_property("hoho",   hoho);
+        v.visit_property("huhu",   huhu);
     };
 };
 
@@ -40,15 +40,19 @@ int main() {
 
     Project* proj = Application::createProject("DefaultProject");
 
-    Object motorObj = proj->createObject("Motor");
+    Entity motorObj = proj->createEntity("Motor");
     auto& motor = motorObj.add<Motor>();
     auto& test = motorObj.add<TestComponent>();
 
-    Object motorObjChild = proj->createObject("Motor 2");
+    Entity motorObjChild = proj->createEntity("Motor 2");
     motorObjChild.setParent(motorObj);
     motorObjChild.add<Motor>();
 
-    Object otherMotor = proj->createObject("Other Motor !!!!");
+    Entity motorObjChild2 = proj->createEntity("Motor 3");
+    motorObjChild2.setParent(motorObj);
+    motorObjChild2.add<Motor>();
+
+    Entity otherMotor = proj->createEntity("Other Motor !!!!");
     otherMotor.add<Motor>();
 
     motor.speed.onChange.connect([](const float& newSpeed) {
@@ -56,7 +60,7 @@ int main() {
     });
     motor.speed.set(45.5f);
 
-    ConsoleProjectVisitor consoleVisitor;
+    IndentationProjectVisitor consoleVisitor;
     proj->reflect(consoleVisitor);
 
     proj->getStack().undo();
@@ -71,7 +75,7 @@ int main() {
         spdlog::info("Successfully loaded project from XML!");
     }
 
-    loadedProj->reflect(consoleVisitor);
+    //loadedProj->reflect(consoleVisitor);
 
     return 0;
 }

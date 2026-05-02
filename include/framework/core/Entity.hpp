@@ -4,11 +4,11 @@
 #include "framework/serialization/ComponentRegistry.hpp"
 #include "framework/commands/CommandStackVisitor.hpp"
 
-class Object {
+class Entity {
 public:
-    Object(entt::entity entity, entt::registry& registry) : m_handle(registry, entity){}
-    Object(entt::handle handle) : m_handle(handle){}
-    Object(entt::registry& registry) : m_handle(registry, entt::null){}
+    Entity(entt::entity entity, entt::registry& registry) : m_handle(registry, entity){}
+    Entity(entt::handle handle) : m_handle(handle){}
+    Entity(entt::registry& registry) : m_handle(registry, entt::null){}
 
     // Helper to add components easily
     template<typename T, typename... Args>
@@ -37,7 +37,7 @@ public:
     bool isValid() const {  return m_handle.valid(); }
     operator bool() const { return m_handle.valid(); }
 
-    void setParent(Object& parent) {
+    void setParent(Entity& parent) {
         auto& myHier = get<HierarchyComponent>();
         auto& parentHier = parent.get<HierarchyComponent>();
 
@@ -52,14 +52,16 @@ public:
         }
         ComponentRegistry::reflectEntityComponents(m_handle, visitor);
         if(auto* hierachy = m_handle.try_get<HierarchyComponent>()){
-            visitor.beginEntityChildren();
-            for(auto childEntity : hierachy->children){
-                Object child(childEntity, *m_handle.registry());
-                if(child.isValid()){
-                    child.reflect(visitor);
+            if(!hierachy->children.empty()){
+                visitor.beginEntityChildren();
+                for(auto childEntity : hierachy->children){
+                    Entity child(childEntity, *m_handle.registry());
+                    if(child.isValid()){
+                        child.reflect(visitor);
+                    }
                 }
+                visitor.endEntityChildren();
             }
-            visitor.endEntityChildren();
         }
         visitor.endEntity();
     }

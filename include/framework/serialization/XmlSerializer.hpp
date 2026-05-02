@@ -6,7 +6,7 @@
 #include <entt/entt.hpp>
 
 class Project;
-class Object;
+class Entity;
 class XmlSaveVisitor;
 
 class XmlSerializer {
@@ -16,7 +16,7 @@ public:
 
 private:
     // Recursive Tree Walkers
-    static void serializeObject(const Object& object, XmlSaveVisitor& visitor);
-    static void deserializeObject(Project& project, pugi::xml_node& parentXml);
+    static void serializeEntity(const Entity& entity, XmlSaveVisitor& visitor);
+    static void deserializeEntity(Project& project, pugi::xml_node& parentXml);
 };
 
