@@ -1,6 +1,7 @@
 #pragma once
-#include <entt/entt.hpp>
+
 #include <vector>
+#include <entt/entt.hpp>
 
 struct HierarchyComponent {
     entt::entity parent{ entt::null };

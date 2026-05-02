@@ -10,10 +10,13 @@
 struct Motor : BaseComponent {
     Parameter<float> speed  {"speed", 0.0f};
     Parameter<float> torque {"torque", 10.0f};
+    std::vector<float> test = {0.0, 1.0, 2.0, 3.0, 4.0};
     
     virtual void reflect(ComponentVisitor& v) override {
         v.visit_property("speed",   speed,  {Tag::Persistent, Tag::CommandStack});
         v.visit_property("torque",  torque, {Tag::Persistent, Tag::CommandStack});
+        VectorAccessor va(test);
+        v.visit_property("test", va, {Tag::Persistent});
     }
 };
 
@@ -25,9 +28,9 @@ struct TestComponent : BaseComponent{
     std::string huhu = "huhu";
     virtual void reflect(ComponentVisitor& v) override {
         v.visit_property("haha",   haha, {Tag::Persistent});
-        v.visit_property("hehe",   hehe, {Tag::Persistent});
-        v.visit_property("hihi",   hihi, {Tag::Persistent});
-        v.visit_property("hoho",   hoho);
+        v.visit_property("hehe",   hehe, {Tag::Persistent, Tag::CommandStack});
+        v.visit_property("hihi",   hihi);
+        v.visit_property("hoho",   hoho, {Tag::Persistent});
         v.visit_property("huhu",   huhu);
     };
 };
@@ -63,19 +66,17 @@ int main() {
     IndentationProjectVisitor consoleVisitor;
     proj->reflect(consoleVisitor);
 
-    proj->getStack().undo();
-
-    if (XmlSerializer::save(*proj, "project_alpha.xml")) {
+    if (XmlSerializer::saveProject(*proj, "project_alpha.xml")) {
         spdlog::info("Successfully saved project to XML!");
     }
 
+    proj->getStack().undo();
 
     Project* loadedProj = Application::createProject("Loaded");
-    if(XmlSerializer::load(*loadedProj, "project_alpha.xml")){
+    if(XmlSerializer::loadProject(*loadedProj, "project_alpha.xml")){
         spdlog::info("Successfully loaded project from XML!");
     }
-
-    //loadedProj->reflect(consoleVisitor);
+    loadedProj->reflect(consoleVisitor);
 
     return 0;
 }

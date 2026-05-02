@@ -5,72 +5,6 @@
 
 #include "framework/core/Visitor.hpp"
 
-struct ConsoleProjectVisitor : public ProjectVisitor {
-    std::vector<bool> lineStack;
-
-    void printIndent() {
-        for (bool hasLine : lineStack) {
-            std::cout << (hasLine ? "|   " : "    ");
-        }
-    }
-
-    // --- Project ---
-    virtual void beginProject() override {
-        std::cout << "\n--- PROJECT EXPLORER ---\n";
-        // We leave lineStack EMPTY here so the root has no prefix
-    }
-    
-    virtual void endProject() override {
-        std::cout << "------------------------\n";
-    }
-
-    // --- Entities ---
-    virtual void beginEntity() override {
-        printIndent();
-        std::cout << "|-- [E] Entity\n";
-        // Now we push to start the vertical line for the entity's contents
-        lineStack.push_back(true); 
-    }
-    
-    virtual void endEntity() override {
-        lineStack.pop_back();
-    }
-
-    // --- Components ---
-    virtual void beginComponent(const char* name) override {
-        printIndent();
-        std::cout << "|-- [C] " << name << "\n";
-        lineStack.push_back(true); 
-    }
-    
-    virtual void endComponent() override {
-        lineStack.pop_back();
-    }
-
-    // --- Children ---
-    virtual void beginEntityChildren() override {
-        printIndent();
-        std::cout << "`-- Children\n";
-        // Push FALSE to indent the children without a vertical pipe
-        lineStack.push_back(false); 
-    }
-    
-    virtual void endEntityChildren() override {
-        lineStack.pop_back();
-    }
-
-    // --- Properties ---
-    virtual void visit_property(const char* label, ParameterBase& p, std::initializer_list<Tag> tags) override {
-        printIndent();
-        std::cout << "|-- " << label << ": " << p.toString() << "\n";
-    }
-    
-    virtual void visit_property(const char* label, std::string& str, std::initializer_list<Tag> tags) override {
-        printIndent();
-        std::cout << "|-- " << label << ": " << str << "\n";
-    }
-};
-
 
 struct IndentationProjectVisitor : public ProjectVisitor {
     int level = 0;
@@ -81,39 +15,43 @@ struct IndentationProjectVisitor : public ProjectVisitor {
     }
 
     // --- Project ---
-    virtual void beginProject() override {
+    virtual bool beginProject() override {
         std::cout << "--- PROJECT EXPLORER ---\n";
         // We don't increment level here if you want Project properties at the margin
+        return true;
     }
     virtual void endProject() override {
         std::cout << "------------------------\n";
     }
 
     // --- Entities ---
-    virtual void beginEntity() override {
+    virtual bool beginEntity() override {
         printIndent();
         std::cout << "[Entity]\n";
         level++;
+        return true;
     }
     virtual void endEntity() override {
         level--;
     }
 
     // --- Components ---
-    virtual void beginComponent(const char* componentName) override {
+    virtual bool beginComponent(const char* componentName) override {
         printIndent();
         std::cout << "Component: " << componentName << "\n";
         level++;
+        return true;
     }
     virtual void endComponent() override {
         level--;
     }
 
     // --- Children ---
-    virtual void beginEntityChildren() override {
+    virtual bool beginEntityChildren() override {
         printIndent();
         std::cout << "Children:\n";
         level++;
+        return true;
     }
     virtual void endEntityChildren() override {
         level--;
@@ -122,11 +60,45 @@ struct IndentationProjectVisitor : public ProjectVisitor {
     // --- Properties ---
     virtual void visit_property(const char* label, ParameterBase& p, std::initializer_list<Tag> tags) override {
         printIndent();
-        std::cout << label << ": " << p.toString() << "\n";
+        std::cout << label << ": " << p.toString();
+        std::cout << "\n";
     }
 
     virtual void visit_property(const char* label, std::string& str, std::initializer_list<Tag> tags) override {
         printIndent();
         std::cout << label << ": " << str << "\n";
     }
+
+    virtual void visit_property(const char* label, float& val, std::initializer_list<Tag> tags) override {
+        printIndent();
+        std::cout << label << ": " << std::to_string(val) << "\n";
+    }
+
+    // --- Lists / Vectors ---
+    virtual bool beginList(const char* name) override {
+        printIndent();
+        std::cout << name << "[]:\n";
+        level++;
+        return true;
+    }
+
+    virtual void endList() override {
+        level--;
+    }
+
+    virtual void visit_property(const char* label, VectorAccessorBase& va, std::initializer_list<Tag> tags) override {
+        // We trigger the grouping logic
+        beginList(label);
+        
+        // Loop through elements. 
+        // We use the format "[%i]" because this is a text UI and brackets look good here.
+        for(size_t i = 0; i < va.size(); i++) {
+            char label[64];
+            std::snprintf(label, sizeof(label), "[%zu]", i);
+            va.visit_element(i, label, *this);
+        }
+        
+        endList();
+    }
+
 };

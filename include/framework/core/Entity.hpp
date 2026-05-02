@@ -33,8 +33,11 @@ public:
     T& get() const { return m_handle.get<T>(); }
 
     entt::handle handle() const { return m_handle; }
+
     entt::registry& registry() const { return *m_handle.registry(); }
+
     bool isValid() const {  return m_handle.valid(); }
+
     operator bool() const { return m_handle.valid(); }
 
     void setParent(Entity& parent) {
@@ -46,24 +49,26 @@ public:
     }
 
     void reflect(EntityVisitor& visitor){
-        visitor.beginEntity();
-        if(auto* name = m_handle.try_get<NameComponent>()){
-            visitor.visit_property("Name", name->name);
-        }
-        ComponentRegistry::reflectEntityComponents(m_handle, visitor);
-        if(auto* hierachy = m_handle.try_get<HierarchyComponent>()){
-            if(!hierachy->children.empty()){
-                visitor.beginEntityChildren();
-                for(auto childEntity : hierachy->children){
-                    Entity child(childEntity, *m_handle.registry());
-                    if(child.isValid()){
-                        child.reflect(visitor);
+        if(visitor.beginEntity()){
+            if(auto* name = m_handle.try_get<NameComponent>()){
+                visitor.visit_property("Name", name->name);
+            }
+            ComponentRegistry::reflectEntityComponents(m_handle, visitor);
+            if(auto* hierachy = m_handle.try_get<HierarchyComponent>()){
+                if(!hierachy->children.empty()){
+                    if(visitor.beginEntityChildren()){
+                        for(auto childEntity : hierachy->children){
+                            Entity child(childEntity, *m_handle.registry());
+                            if(child.isValid()){
+                                child.reflect(visitor);
+                            }
+                        }
+                        visitor.endEntityChildren();
                     }
                 }
-                visitor.endEntityChildren();
             }
+            visitor.endEntity();
         }
-        visitor.endEntity();
     }
 
 private:

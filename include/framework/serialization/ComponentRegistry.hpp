@@ -1,10 +1,10 @@
 #pragma once
 
 #include <entt/entt.hpp>
-#include <pugixml.hpp>
-#include "framework/serialization/XmlVisitors.hpp"
 
+#include "framework/core/Visitor.hpp"
 
+class CommandStack;
 
 struct BaseComponent {
     CommandStack* undoStack = nullptr;
@@ -21,6 +21,7 @@ namespace ComponentRegistry{
     };
 
     inline std::unordered_map<entt::id_type, ComponentTypeInfo> componentInfoById;
+    inline std::unordered_map<std::string, ComponentTypeInfo> componentInfoByTypeName;
 
     template<typename T>
     void registerComponent(const std::string& saveString){
@@ -36,29 +37,36 @@ namespace ComponentRegistry{
         };
         entt::id_type componentId = entt::type_id<T>().hash();
         componentInfoById[componentId] = info;
+        componentInfoByTypeName[saveString] = info;
     };
 
 
     inline void reflectEntityComponents(entt::handle handle, ComponentVisitor& visitor) {
         auto& reg = *handle.registry();
         auto entity = handle.entity();
-        for(auto [componentId, storage] : reg.storage()) {
-            if(storage.contains(entity) && componentInfoById.contains(componentId)) {
-                const ComponentTypeInfo& info = componentInfoById.at(componentId);
-                visitor.beginComponent(info.saveString.c_str());
-                info.reflect(handle, visitor);
-                visitor.endComponent();
+        for(auto [componentTypeId, storage] : reg.storage()) {
+            if(storage.contains(entity) && componentInfoById.contains(componentTypeId)) {
+                const ComponentTypeInfo& info = componentInfoById.at(componentTypeId);
+                if(visitor.beginComponent(info.saveString.c_str())){
+                    info.reflect(handle, visitor);
+                    visitor.endComponent();
+                }
             }
         }
     }
 
-    inline const ComponentTypeInfo* findInfoBySaveName(std::string_view name) {
-        for (auto& [id, info] : componentInfoById) {
-            if (info.saveString == name) {
-                return &info;
+    inline bool addReflectEntityComponent(entt::handle handle, const char* componentTypeName, ComponentVisitor& visitor){
+        if(componentInfoByTypeName.contains(componentTypeName)){
+            auto& info = componentInfoByTypeName[componentTypeName];
+            if(visitor.beginComponent(componentTypeName)){
+                info.createComponent(handle);
+                info.reflect(handle, visitor);
+                visitor.endComponent();
+                return true;
             }
+            return false;
         }
-        return nullptr;
+        return false;
     }
 
 }

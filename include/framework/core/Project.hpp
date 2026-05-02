@@ -41,16 +41,17 @@ public:
     }
 
     void reflect(ProjectVisitor& visitor){
-        visitor.beginProject();
-        visitor.visit_property("Name", m_name);
-        auto view = m_registry.view<HierarchyComponent>();
-        for(auto entity : view) {
-            if(view.get<HierarchyComponent>(entity).parent == entt::null) {
-                Entity ent(entity, m_registry);
-                ent.reflect(visitor);
+        if(visitor.beginProject()){
+            visitor.visit_property("Name", m_name);
+            auto view = m_registry.view<HierarchyComponent>();
+            for(auto entity : view) {
+                if(view.get<HierarchyComponent>(entity).parent == entt::null) {
+                    Entity ent(entity, m_registry);
+                    ent.reflect(visitor);
+                }
             }
+            visitor.endProject();
         }
-        visitor.endProject();
     }
 
 
