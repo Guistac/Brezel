@@ -9,6 +9,8 @@ class Entity;
 
 enum class Tag {
     Persistent,  // Include in XML save/load
+    Load_Critical,
+    Load_Warn,
     Hidden,      // Exclude from UI display
     ReadOnly,    // Observable but not writable
     Networked,   // Sync over network
@@ -19,7 +21,7 @@ class VectorAccessorBase {
 public:
     virtual size_t size() const = 0;
     virtual void resize(size_t size) = 0;
-    virtual void visit_element(size_t index, const char* label, class ComponentVisitor& visitor) = 0;
+    virtual void visit_element(size_t index, const char* label, class ComponentVisitor& visitor, std::initializer_list<Tag> tags = {}) = 0;
 };
 
 class ComponentVisitor {
@@ -30,7 +32,6 @@ public:
     virtual void visit_property(const char*, bool&,                 std::initializer_list<Tag> tags = {}) {}
     virtual void visit_property(const char*, std::string&,          std::initializer_list<Tag> tags = {}) {}
     virtual void visit_property(const char*, ParameterBase&,        std::initializer_list<Tag> tags = {}) {}
-    virtual void visit_property(const char*, UUID&,                 std::initializer_list<Tag> tags = {}) {}
     virtual void visit_property(const char*, EntityReference&,      std::initializer_list<Tag> tags = {}) {}
     virtual void visit_property(const char*, VectorAccessorBase&,   std::initializer_list<Tag> tags = {}) {}
 
@@ -68,11 +69,11 @@ public:
         m_vec.resize(size);
     }
 
-    virtual void visit_element(size_t index, const char* label, ComponentVisitor& visitor) override {        
+    virtual void visit_element(size_t index, const char* label, ComponentVisitor& visitor, std::initializer_list<Tag> tags = {}) override {        
         // If T is a primitive, this calls the standard visit_property
         // If T is a struct, you'd call m_vec[index].reflect(visitor)
         if constexpr (std::is_fundamental_v<T> || std::is_same_v<T, std::string>) {
-            visitor.visit_property(label, m_vec[index]);
+            visitor.visit_property(label, m_vec[index], tags);
         } else {
             m_vec[index].reflect(visitor);
         }

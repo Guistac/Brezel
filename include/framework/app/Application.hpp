@@ -5,6 +5,7 @@
 #include "framework/core/Project.hpp"
 #include "framework/serialization/XmlDeserializer.hpp"
 #include "framework/serialization/XmlSerializer.hpp"
+#include "framework/serialization/DeserializationValidation.hpp"
 
 namespace Application {
 
@@ -33,12 +34,25 @@ namespace Application {
     }
 
     inline Project* loadProject(std::string_view path){
+        DeserializationValidationReport report;
+
         auto loadedProject = std::make_unique<Project>("");
+        if(!Xml::loadProject(*loadedProject.get(), path, report)) return nullptr;
 
-        if(!Xml::loadProject(*loadedProject.get(), path)) return nullptr;
-
-        EntityReferenceLinkerVisitor linker(*loadedProject.get());
+        EntityReferenceLinkerVisitor linker(*loadedProject.get(), report);
         loadedProject->reflect(linker);
+
+        switch(report.getSeverity()){
+            case Severity::Critical:
+                report.log();
+                return nullptr;
+            case Severity::Warning:
+                report.log();
+                break;
+            case Severity::Valid:
+                break;
+        }
+
 
         m_projects.push_back(std::move(loadedProject));
         m_activeProjectIndex = m_projects.size() - 1;

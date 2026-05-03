@@ -62,9 +62,8 @@ namespace ComponentRegistry{
                 info.createComponent(handle);
                 info.reflect(handle, visitor);
                 visitor.endComponent();
-                return true;
             }
-            return false;
+            return true;
         }
         return false;
     }

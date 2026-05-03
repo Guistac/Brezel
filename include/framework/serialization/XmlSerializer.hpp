@@ -44,14 +44,10 @@ public:
         IdentityComponent& identity = entity.get<IdentityComponent>();
 
         pugi::xml_node comment = nodeStack.top().append_child(pugi::node_comment);
-        std::string str = " Entity \"" + identity.name + "\" : ";
+        std::string str = " Entity with ";
         EntityComponentNameVisitor visitor;
         ComponentRegistry::reflectEntityComponents(entity.handle(), visitor);
-        for(auto& name : visitor.componentNames){
-            str += "[" + name + "] ";
-        }
-
-
+        for(auto& name : visitor.componentNames) str += "[" + name + "] ";
         comment.set_value(str.c_str());
 
         push(entityTagString);
@@ -71,50 +67,55 @@ public:
     virtual void endList() override { pop(); }
 
     virtual void visit_property(const char* label, ParameterBase& p, std::initializer_list<Tag> tags) override {
+        if (!isPersistent(tags)) return;
         push(label);
-        if (isPersistent(tags)) {
-            nodeStack.top().append_attribute("val") = p.toString().c_str();
-        }
+        nodeStack.top().append_attribute("val") = p.toString().c_str();
         pop();
     }
     
     virtual void visit_property(const char* label, std::string& str, std::initializer_list<Tag> tags) override{
+        if (!isPersistent(tags)) return;
         push(label);
         nodeStack.top().append_attribute("val") = str.c_str();
         pop();
     };
 
     virtual void visit_property(const char* label, float& val, std::initializer_list<Tag> tags) override{
+        if (!isPersistent(tags)) return;
         push(label);
         nodeStack.top().append_attribute("val") = val;
         pop();
     };
 
     virtual void visit_property(const char* label, int& val, std::initializer_list<Tag> tags) override {
+        if (!isPersistent(tags)) return;
         push(label);
         nodeStack.top().append_attribute("val") = val;
         pop();
     }
 
-    virtual void visit_property(const char* label, UUID& uuid, std::initializer_list<Tag> tags = {}) override {
-        push(label);
-        nodeStack.top().append_attribute("val") = uuid.value;
-        pop();
-    }
-
     virtual void visit_property(const char* label, EntityReference& ref, std::initializer_list<Tag> tags = {}) override {
+        if (!isPersistent(tags)) return;
         push(label);
         nodeStack.top().append_attribute("UUID") = ref.uuid.value;
         pop();
+        pugi::xml_node comment = nodeStack.top().append_child(pugi::node_comment);
+        std::string commentstr = "Entity Name: ";
+        if(auto identity = ref.entity.try_get<IdentityComponent>()){
+            commentstr += "\"" + identity->name + "\"";
+        }
+        else commentstr += "[Unresolved]";
+        comment.set_value(commentstr.c_str());
     }
 
     virtual void visit_property(const char* label, VectorAccessorBase& va, std::initializer_list<Tag> tags) override{
+        if (!isPersistent(tags)) return;
         beginList(label);
         nodeStack.top().append_attribute(listSizeTagString) = va.size();
         for(size_t i = 0; i < va.size(); i++){
             char label[64];
             std::snprintf(label, sizeof(label), listElementFormatString, i);
-            va.visit_element(i, label, *this);
+            va.visit_element(i, label, *this, tags);
         }
         endList();
     }

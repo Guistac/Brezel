@@ -43,6 +43,9 @@ int main() {
     ComponentRegistry::registerComponent<Motor>("Motor");
     ComponentRegistry::registerComponent<TestComponent>("TestComponent");
 
+    ConsoleDebugProjectVisitor consoleVisitor;
+
+    /*
     Project* proj = Application::createProject("DefaultProject");
 
     Entity motorObj = proj->createEntity("Motor");
@@ -67,18 +70,20 @@ int main() {
     });
     motor.speed.set(45.5f);
 
-    ConsoleDebugProjectVisitor consoleVisitor;
+
     proj->reflect(consoleVisitor);
 
     if(Application::saveProject(proj, "project_alpha.xml")){
         spdlog::info("Successfully saved project to XML!");
-        if(Project* loadedProj = Application::loadProject("project_alpha.xml")){
-            spdlog::info("Successfully loaded project from XML!");
-            loadedProj->reflect(consoleVisitor);
-        }
+    }
+        */
+
+    if(Project* loadedProj = Application::loadProject("project_alpha.xml")){
+        spdlog::info("Successfully loaded project from XML!");
+        //loadedProj->reflect(consoleVisitor);
     }
 
-    proj->getStack().undo();
+    //proj->getStack().undo();
 
     return 0;
 }

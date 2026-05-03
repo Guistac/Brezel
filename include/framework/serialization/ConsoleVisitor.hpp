@@ -82,11 +82,6 @@ public:
         std::cout << label << ": " << std::to_string(val) << "\n";
     }
 
-    virtual void visit_property(const char* label, UUID& uuid, std::initializer_list<Tag> tags) override {
-        printIndent();
-        std::cout << label << ": 0x" << std::hex << std::setw(16) << std::setfill('0') << uuid.value << std::dec << "\n";
-    }
-
     virtual void visit_property(const char* label, EntityReference& ref, std::initializer_list<Tag> tags) override {
         printIndent();
         std::string name = "[Unresolved]";
