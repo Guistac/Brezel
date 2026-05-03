@@ -70,17 +70,15 @@ int main() {
     ConsoleDebugProjectVisitor consoleVisitor;
     proj->reflect(consoleVisitor);
 
-    if (Xml::saveProject(*proj, "project_alpha.xml")) {
+    if(Application::saveProject(proj, "project_alpha.xml")){
         spdlog::info("Successfully saved project to XML!");
+        if(Project* loadedProj = Application::loadProject("project_alpha.xml")){
+            spdlog::info("Successfully loaded project from XML!");
+            loadedProj->reflect(consoleVisitor);
+        }
     }
 
     proj->getStack().undo();
-
-    Project* loadedProj = Application::createProject("Loaded");
-    if(Xml::loadProject(*loadedProj, "project_alpha.xml")){
-        spdlog::info("Successfully loaded project from XML!");
-    }
-    loadedProj->reflect(consoleVisitor);
 
     return 0;
 }

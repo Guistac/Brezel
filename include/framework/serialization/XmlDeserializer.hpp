@@ -64,38 +64,45 @@ public:
         return loadedEntity;
     }
 
+    pugi::xml_attribute getAttribute(const char* xmlTagName, const char* attributeName){
+        if(auto tag = nodeStack.top().child(xmlTagName)){
+            return tag.attribute(attributeName);
+        }
+        return pugi::xml_attribute();
+    }
+
     virtual void visit_property(const char* label, ParameterBase& p, std::initializer_list<Tag> tags) override {
-        if (auto attr = nodeStack.top().attribute(label)) {
+        if(auto attr = getAttribute(label, "val")){
             p.fromString(attr.as_string());
             if(hasCommandStack(tags)) p.setCommandStack(&m_project.getStack());
         }
     }
     virtual void visit_property(const char* label, std::string& str, std::initializer_list<Tag> tags) override{
-        if (auto attr = nodeStack.top().attribute(label)) {
+        if(auto attr = getAttribute(label, "val")){
             str = attr.as_string();
         }
     };
 
     virtual void visit_property(const char* label, float& val, std::initializer_list<Tag> tags) override{
-        if(auto attr = nodeStack.top().attribute(label)){
+        if(auto attr = getAttribute(label, "val")){
             val = attr.as_float();
         }
     };
 
     virtual void visit_property(const char* label, int& val, std::initializer_list<Tag> tags = {}) override {
-        if(auto attr = nodeStack.top().attribute(label)){
+        if(auto attr = getAttribute(label, "val")){
             val = attr.as_int();
         }
     }
 
     virtual void visit_property(const char* label, UUID& uuid, std::initializer_list<Tag> tags = {}) override {
-        if(auto attr = nodeStack.top().attribute(label)){
+        if(auto attr = getAttribute(label, "val")){
             uuid.value = attr.as_ullong();
         }
     }
 
     virtual void visit_property(const char* label, EntityReference& ref, std::initializer_list<Tag> tags = {}) override {
-        if(auto attr = nodeStack.top().attribute(label)){
+        if(auto attr = getAttribute(label, "UUID")){
             ref.uuid.value = attr.as_ullong();
         }
     }
@@ -132,13 +139,12 @@ private:
     std::stack<pugi::xml_node> nodeStack;
 };
 
+//Not intended for user, use Application::loadProject()
 inline bool loadProject(Project& project, std::string_view filepath) {
     pugi::xml_document doc;
     if (!doc.load_file(filepath.data())) return false;
     ProjectLoadVisitor loader(project, doc);
     project.reflect(loader);
-    EntityReferenceLinkerVisitor linker(project);
-    project.reflect(linker);
     return true;
 }
 

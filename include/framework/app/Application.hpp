@@ -3,6 +3,8 @@
 #include <memory>
 #include <optional>
 #include "framework/core/Project.hpp"
+#include "framework/serialization/XmlDeserializer.hpp"
+#include "framework/serialization/XmlSerializer.hpp"
 
 namespace Application {
 
@@ -28,6 +30,23 @@ namespace Application {
             return m_projects[*m_activeProjectIndex].get();
         }
         return nullptr;
+    }
+
+    inline Project* loadProject(std::string_view path){
+        auto loadedProject = std::make_unique<Project>("");
+
+        if(!Xml::loadProject(*loadedProject.get(), path)) return nullptr;
+
+        EntityReferenceLinkerVisitor linker(*loadedProject.get());
+        loadedProject->reflect(linker);
+
+        m_projects.push_back(std::move(loadedProject));
+        m_activeProjectIndex = m_projects.size() - 1;
+        return m_projects.back().get();
+    }
+
+    inline bool saveProject(Project* project, std::string_view path){
+        return Xml::saveProject(*project, path);
     }
 
 };

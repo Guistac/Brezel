@@ -12,6 +12,14 @@
 
 namespace Xml{
 
+class EntityComponentNameVisitor : public ComponentVisitor{
+public:
+    std::vector<std::string> componentNames;
+    virtual bool beginComponent(const char* componentName) override {
+        componentNames.push_back(componentName);
+        return false;
+    }
+};
 
 class ProjectSaveVisitor : public ProjectVisitor {
 public:
@@ -33,8 +41,20 @@ public:
     virtual void endProject() override { pop(); }
 
     virtual bool beginEntity(Entity& entity) override {
-        push(entityTagString);
         IdentityComponent& identity = entity.get<IdentityComponent>();
+
+        pugi::xml_node comment = nodeStack.top().append_child(pugi::node_comment);
+        std::string str = " Entity \"" + identity.name + "\" : ";
+        EntityComponentNameVisitor visitor;
+        ComponentRegistry::reflectEntityComponents(entity.handle(), visitor);
+        for(auto& name : visitor.componentNames){
+            str += "[" + name + "] ";
+        }
+
+
+        comment.set_value(str.c_str());
+
+        push(entityTagString);
         nodeStack.top().append_attribute("Name") = identity.name;
         nodeStack.top().append_attribute("UUID") = identity.uuid.value;
         return true;
@@ -51,29 +71,41 @@ public:
     virtual void endList() override { pop(); }
 
     virtual void visit_property(const char* label, ParameterBase& p, std::initializer_list<Tag> tags) override {
+        push(label);
         if (isPersistent(tags)) {
-            nodeStack.top().append_attribute(label) = p.toString().c_str();
+            nodeStack.top().append_attribute("val") = p.toString().c_str();
         }
+        pop();
     }
     
     virtual void visit_property(const char* label, std::string& str, std::initializer_list<Tag> tags) override{
-        nodeStack.top().append_attribute(label) = str.c_str();
+        push(label);
+        nodeStack.top().append_attribute("val") = str.c_str();
+        pop();
     };
 
     virtual void visit_property(const char* label, float& val, std::initializer_list<Tag> tags) override{
-        nodeStack.top().append_attribute(label) = val;
+        push(label);
+        nodeStack.top().append_attribute("val") = val;
+        pop();
     };
 
     virtual void visit_property(const char* label, int& val, std::initializer_list<Tag> tags) override {
-        nodeStack.top().append_attribute(label) = val;
+        push(label);
+        nodeStack.top().append_attribute("val") = val;
+        pop();
     }
 
     virtual void visit_property(const char* label, UUID& uuid, std::initializer_list<Tag> tags = {}) override {
-        nodeStack.top().append_attribute(label) = uuid.value;
+        push(label);
+        nodeStack.top().append_attribute("val") = uuid.value;
+        pop();
     }
 
     virtual void visit_property(const char* label, EntityReference& ref, std::initializer_list<Tag> tags = {}) override {
-        nodeStack.top().append_attribute(label) = ref.uuid.value;
+        push(label);
+        nodeStack.top().append_attribute("UUID") = ref.uuid.value;
+        pop();
     }
 
     virtual void visit_property(const char* label, VectorAccessorBase& va, std::initializer_list<Tag> tags) override{
@@ -93,6 +125,7 @@ private:
 };
 
 
+//Not intended for user, use Application::saveProject()
 inline bool saveProject(Project& project, std::string_view filepath) {
     pugi::xml_document doc;
     ProjectSaveVisitor visitor(project, doc);
