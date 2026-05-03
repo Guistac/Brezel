@@ -1,14 +1,14 @@
 #pragma once
 
 #include <iostream>
+#include <iomanip>
 #include <string>
 
 #include "framework/core/Visitor.hpp"
 
 
-struct IndentationProjectVisitor : public ProjectVisitor {
-    int level = 0;
-    const int spacesPerLevel = 4;
+class ConsoleDebugProjectVisitor : public ProjectVisitor {
+public:
 
     void printIndent() {
         std::cout << std::string(level * spacesPerLevel, ' ');
@@ -25,13 +25,16 @@ struct IndentationProjectVisitor : public ProjectVisitor {
     }
 
     // --- Entities ---
-    virtual bool beginEntity() override {
+    virtual bool beginEntity(Entity& entity) override {
         printIndent();
-        std::cout << "[Entity]\n";
+        IdentityComponent identity;
+        if(entity.has<IdentityComponent>()) identity = entity.get<IdentityComponent>();
+        std::cout << "[Entity] \"" << identity.name << "\" "
+        << "UUID: 0x" << std::hex << std::setw(16) << std::setfill('0') << identity.uuid.value << std::dec << "\n";
         level++;
         return true;
     }
-    virtual void endEntity() override {
+    virtual void endEntity(Entity& entity) override {
         level--;
     }
 
@@ -74,6 +77,23 @@ struct IndentationProjectVisitor : public ProjectVisitor {
         std::cout << label << ": " << std::to_string(val) << "\n";
     }
 
+    virtual void visit_property(const char* label, int& val, std::initializer_list<Tag> tags) override {
+        printIndent();
+        std::cout << label << ": " << std::to_string(val) << "\n";
+    }
+
+    virtual void visit_property(const char* label, UUID& uuid, std::initializer_list<Tag> tags) override {
+        printIndent();
+        std::cout << label << ": 0x" << std::hex << std::setw(16) << std::setfill('0') << uuid.value << std::dec << "\n";
+    }
+
+    virtual void visit_property(const char* label, EntityReference& ref, std::initializer_list<Tag> tags) override {
+        printIndent();
+        std::string name = "[Unresolved]";
+        if(ref.entity.has<IdentityComponent>()) name = ref.entity.get<IdentityComponent>().name;
+        std::cout << label << ": \"" << name << "\" UUID: 0x" << std::hex << std::setw(16) << std::setfill('0') << ref.uuid.value << std::dec << "\n";
+    }
+
     // --- Lists / Vectors ---
     virtual bool beginList(const char* name) override {
         printIndent();
@@ -101,4 +121,7 @@ struct IndentationProjectVisitor : public ProjectVisitor {
         endList();
     }
 
+private:
+    int level = 0;
+    const int spacesPerLevel = 4;
 };

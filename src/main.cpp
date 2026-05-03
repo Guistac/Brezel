@@ -2,7 +2,7 @@
 #include "framework/core/Project.hpp"
 #include "framework/commands/PropertyCommand.hpp"
 #include "framework/serialization/XmlSerializer.hpp"
-#include "framework/serialization/ComponentRegistry.hpp"
+#include "framework/serialization/XmlDeserializer.hpp"
 #include "framework/serialization/ConsoleVisitor.hpp"
 
 #include <spdlog/spdlog.h>
@@ -26,7 +26,9 @@ struct TestComponent : BaseComponent{
     Parameter<float> hihi{"hihi", 987.6};
     std::string hoho = "hoho";
     std::string huhu = "huhu";
+    EntityReference motorRef;
     virtual void reflect(ComponentVisitor& v) override {
+        v.visit_property("motorRef", motorRef, {Tag::Persistent});
         v.visit_property("haha",   haha, {Tag::Persistent});
         v.visit_property("hehe",   hehe, {Tag::Persistent, Tag::CommandStack});
         v.visit_property("hihi",   hihi);
@@ -58,22 +60,24 @@ int main() {
     Entity otherMotor = proj->createEntity("Other Motor !!!!");
     otherMotor.add<Motor>();
 
+    test.motorRef.set(motorObjChild2);
+
     motor.speed.onChange.connect([](const float& newSpeed) {
         spdlog::info("Speed updated to {}", newSpeed);
     });
     motor.speed.set(45.5f);
 
-    IndentationProjectVisitor consoleVisitor;
+    ConsoleDebugProjectVisitor consoleVisitor;
     proj->reflect(consoleVisitor);
 
-    if (XmlSerializer::saveProject(*proj, "project_alpha.xml")) {
+    if (Xml::saveProject(*proj, "project_alpha.xml")) {
         spdlog::info("Successfully saved project to XML!");
     }
 
     proj->getStack().undo();
 
     Project* loadedProj = Application::createProject("Loaded");
-    if(XmlSerializer::loadProject(*loadedProj, "project_alpha.xml")){
+    if(Xml::loadProject(*loadedProj, "project_alpha.xml")){
         spdlog::info("Successfully loaded project from XML!");
     }
     loadedProj->reflect(consoleVisitor);

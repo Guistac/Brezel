@@ -3,6 +3,9 @@
 #include <vector>
 
 class ParameterBase;
+struct UUID;
+struct EntityReference;
+class Entity;
 
 enum class Tag {
     Persistent,  // Include in XML save/load
@@ -19,7 +22,7 @@ public:
     virtual void visit_element(size_t index, const char* label, class ComponentVisitor& visitor) = 0;
 };
 
-struct ComponentVisitor {
+class ComponentVisitor {
 public:
 
     virtual void visit_property(const char*, int&,                  std::initializer_list<Tag> tags = {}) {}
@@ -27,7 +30,9 @@ public:
     virtual void visit_property(const char*, bool&,                 std::initializer_list<Tag> tags = {}) {}
     virtual void visit_property(const char*, std::string&,          std::initializer_list<Tag> tags = {}) {}
     virtual void visit_property(const char*, ParameterBase&,        std::initializer_list<Tag> tags = {}) {}
-    virtual void visit_property(const char*, VectorAccessorBase&, std::initializer_list<Tag> tags = {}) {}
+    virtual void visit_property(const char*, UUID&,                 std::initializer_list<Tag> tags = {}) {}
+    virtual void visit_property(const char*, EntityReference&,      std::initializer_list<Tag> tags = {}) {}
+    virtual void visit_property(const char*, VectorAccessorBase&,   std::initializer_list<Tag> tags = {}) {}
 
 
     virtual bool beginComponent(const char* componentName) { return true; }
@@ -78,15 +83,15 @@ public:
 
 
 
-struct EntityVisitor : public ComponentVisitor{
+class EntityVisitor : public ComponentVisitor{
 public:
-    virtual bool beginEntity(){ return true; }
-    virtual void endEntity(){}
+    virtual bool beginEntity(Entity& entity){ return true; }
+    virtual void endEntity(Entity& entity){}
     virtual bool beginEntityChildren(){ return true; }
     virtual void endEntityChildren(){}
 };
 
-struct ProjectVisitor : public EntityVisitor{
+class ProjectVisitor : public EntityVisitor{
 public:
     virtual bool beginProject(){ return true; }
     virtual void endProject(){}
