@@ -69,6 +69,19 @@ public:
         else return Entity(m_registry);
     }
 
+    template<typename Func, typename... Args>
+    void forEachTopLevelEntity(Func&& callback, Args&&... args) {
+        auto view = m_registry.view<HierarchyComponent>();
+        for (auto entityHandle : view) {
+            const auto& hierarchy = view.get<HierarchyComponent>(entityHandle);
+            if (hierarchy.parent == entt::null) {
+                Entity ent(entityHandle, m_registry);
+                // Invoke the callback with the entity and any extra arguments
+                std::invoke(std::forward<Func>(callback), ent, std::forward<Args>(args)...);
+            }
+        }
+    }
+
     Entity getEntityByPath(std::string_view path) {
         if (path.empty()) return Entity(m_registry);
         
@@ -106,20 +119,6 @@ public:
         }
 
         return current;
-    }
-
-    void reflect(ProjectVisitor& visitor){
-        if(visitor.beginProject()){
-            visitor.visit_property("Name", m_name);
-            auto view = m_registry.view<HierarchyComponent>();
-            for(auto entity : view) {
-                if(view.get<HierarchyComponent>(entity).parent == entt::null) {
-                    Entity ent(entity, m_registry);
-                    ent.reflect(visitor);
-                }
-            }
-            visitor.endProject();
-        }
     }
 
     IDProvider& ids() { return *m_idProvider; }

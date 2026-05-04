@@ -35,11 +35,10 @@ public:
     virtual void visit_property(const char*, EntityReference&,      std::initializer_list<Tag> tags = {}) {}
     virtual void visit_property(const char*, VectorAccessorBase&,   std::initializer_list<Tag> tags = {}) {}
 
-
     virtual bool beginComponent(const char* componentName) { return true; }
     virtual void endComponent() {}
 
-    virtual bool beginList(const char* name) { return true; }
+    virtual bool beginList(const char* name, size_t size) { return true; }
     virtual void endList() {}
 
     // Named callables with no arguments — rendered as buttons in UI
@@ -61,7 +60,6 @@ class VectorAccessor : public VectorAccessorBase {
 public:
     VectorAccessor(std::vector<T>& vec) : m_vec(vec) {}
     std::vector<T>& m_vec;
-    std::string m_fmt;
 
     virtual size_t size() const override { return m_vec.size(); }
     virtual void resize(size_t size) override {
@@ -79,21 +77,4 @@ public:
         }
     }
 
-};
-
-
-
-
-class EntityVisitor : public ComponentVisitor{
-public:
-    virtual bool beginEntity(Entity& entity){ return true; }
-    virtual void endEntity(Entity& entity){}
-    virtual bool beginEntityChildren(){ return true; }
-    virtual void endEntityChildren(){}
-};
-
-class ProjectVisitor : public EntityVisitor{
-public:
-    virtual bool beginProject(){ return true; }
-    virtual void endProject(){}
 };

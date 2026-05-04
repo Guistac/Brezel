@@ -53,23 +53,18 @@ public:
         parentHier.children.push_back(m_handle.entity());
     }
 
-    void reflect(EntityVisitor& visitor){
-        if(visitor.beginEntity(*this)){
-            ComponentRegistry::reflectEntityComponents(m_handle, visitor);
-            if(auto* hierachy = m_handle.try_get<HierarchyComponent>()){
-                if(!hierachy->children.empty()){
-                    if(visitor.beginEntityChildren()){
-                        for(auto childEntity : hierachy->children){
-                            Entity child(childEntity, *m_handle.registry());
-                            if(child.isValid()){
-                                child.reflect(visitor);
-                            }
-                        }
-                        visitor.endEntityChildren();
+    template<typename Func, typename... Args>
+    void forEachChildEntity(Func&& callback, Args&&... args){
+        if(auto hierachy = try_get<HierarchyComponent>()){
+            if(!hierachy->children.empty()){
+                for(auto child : hierachy->children){
+                    Entity childEntity(child, registry());
+                    if(childEntity.isValid()){
+                        // Invoke the callback with the entity and any extra arguments
+                        std::invoke(std::forward<Func>(callback), childEntity, std::forward<Args>(args)...);
                     }
                 }
             }
-            visitor.endEntity(*this);
         }
     }
 

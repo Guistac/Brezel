@@ -7,64 +7,31 @@
 #include "framework/core/Visitor.hpp"
 
 
-class ConsoleDebugProjectVisitor : public ProjectVisitor {
+class ConsoleDebugVisitor : public ComponentVisitor {
 public:
-
     void printIndent() {
         std::cout << std::string(level * spacesPerLevel, ' ');
     }
 
-    // --- Project ---
-    virtual bool beginProject() override {
-        std::cout << "--- PROJECT EXPLORER ---\n";
-        // We don't increment level here if you want Project properties at the margin
-        return true;
-    }
-    virtual void endProject() override {
-        std::cout << "------------------------\n";
-    }
-
-    // --- Entities ---
-    virtual bool beginEntity(Entity& entity) override {
-        printIndent();
-        IdentityComponent identity;
-        if(entity.has<IdentityComponent>()) identity = entity.get<IdentityComponent>();
-        std::cout << "[Entity] \"" << identity.name << "\" "
-        << "UUID: 0x" << std::hex << std::setw(16) << std::setfill('0') << identity.uuid.value << std::dec << "\n";
-        level++;
-        return true;
-    }
-    virtual void endEntity(Entity& entity) override {
-        level--;
-    }
+    // Helpers for external functions to manage hierarchy
+    void pushLevel() { level++; }
+    void popLevel()  { level--; }
 
     // --- Components ---
     virtual bool beginComponent(const char* componentName) override {
         printIndent();
         std::cout << "Component: " << componentName << "\n";
-        level++;
+        pushLevel();
         return true;
     }
     virtual void endComponent() override {
-        level--;
-    }
-
-    // --- Children ---
-    virtual bool beginEntityChildren() override {
-        printIndent();
-        std::cout << "Children:\n";
-        level++;
-        return true;
-    }
-    virtual void endEntityChildren() override {
-        level--;
+        popLevel();
     }
 
     // --- Properties ---
     virtual void visit_property(const char* label, ParameterBase& p, std::initializer_list<Tag> tags) override {
         printIndent();
-        std::cout << label << ": " << p.toString();
-        std::cout << "\n";
+        std::cout << label << ": " << p.toString() << "\n";
     }
 
     virtual void visit_property(const char* label, std::string& str, std::initializer_list<Tag> tags) override {
@@ -74,45 +41,42 @@ public:
 
     virtual void visit_property(const char* label, float& val, std::initializer_list<Tag> tags) override {
         printIndent();
-        std::cout << label << ": " << std::to_string(val) << "\n";
+        std::cout << label << ": " << val << "\n";
     }
 
     virtual void visit_property(const char* label, int& val, std::initializer_list<Tag> tags) override {
         printIndent();
-        std::cout << label << ": " << std::to_string(val) << "\n";
+        std::cout << label << ": " << val << "\n";
     }
 
     virtual void visit_property(const char* label, EntityReference& ref, std::initializer_list<Tag> tags) override {
         printIndent();
         std::string name = "[Unresolved]";
-        if(ref.entity.has<IdentityComponent>()) name = ref.entity.get<IdentityComponent>().name;
+        if(ref.entity.isValid() && ref.entity.has<IdentityComponent>()) {
+            name = ref.entity.get<IdentityComponent>().name;
+        }
         std::cout << label << ": \"" << name << "\" UUID: 0x" << std::hex << std::setw(16) << std::setfill('0') << ref.uuid.value << std::dec << "\n";
     }
 
     // --- Lists / Vectors ---
-    virtual bool beginList(const char* name) override {
+    virtual bool beginList(const char* name, size_t size) override {
         printIndent();
-        std::cout << name << "[]:\n";
-        level++;
+        std::cout << name << "[" << std::to_string(0) << "]:\n";
+        pushLevel();
         return true;
     }
 
     virtual void endList() override {
-        level--;
+        popLevel();
     }
 
     virtual void visit_property(const char* label, VectorAccessorBase& va, std::initializer_list<Tag> tags) override {
-        // We trigger the grouping logic
-        beginList(label);
-        
-        // Loop through elements. 
-        // We use the format "[%i]" because this is a text UI and brackets look good here.
+        beginList(label, va.size());
         for(size_t i = 0; i < va.size(); i++) {
-            char label[64];
-            std::snprintf(label, sizeof(label), "[%zu]", i);
-            va.visit_element(i, label, *this);
+            char idxLabel[64];
+            std::snprintf(idxLabel, sizeof(idxLabel), "[%zu]", i);
+            va.visit_element(i, idxLabel, *this);
         }
-        
         endList();
     }
 
@@ -120,3 +84,35 @@ private:
     int level = 0;
     const int spacesPerLevel = 4;
 };
+
+
+void printEntity(Entity& entity, ConsoleDebugVisitor& visitor) {
+    // 1. Print Entity Header
+    visitor.printIndent();
+    
+    std::string name = "Unnamed Entity";
+    if (entity.has<IdentityComponent>()) {
+        name = entity.get<IdentityComponent>().name;
+    }
+    
+    std::cout << "[Entity] \"" << name << "\"\n";
+
+    // 2. Reflect Components (Indented)
+    visitor.pushLevel();
+    ComponentRegistry::reflectEntityComponents(entity.handle(), visitor);
+    
+    visitor.printIndent();
+    std::cout << "Children:\n";        
+    visitor.pushLevel();
+    entity.forEachChildEntity(printEntity, visitor);
+    visitor.popLevel();
+
+    visitor.popLevel();
+}
+
+void printProject(Project& project) {
+    ConsoleDebugVisitor visitor;
+    std::cout << "--- PROJECT EXPLORER ---\n";
+    project.forEachTopLevelEntity(printEntity, visitor);    
+    std::cout << "------------------------\n";
+}

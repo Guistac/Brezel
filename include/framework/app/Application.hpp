@@ -41,8 +41,7 @@ inline Project *loadProject(std::string_view path) {
   if (!Xml::loadProject(*loadedProject.get(), path, report))
     return nullptr;
 
-  EntityReferenceLinkerVisitor linker(*loadedProject.get(), report);
-  loadedProject->reflect(linker);
+  relinkProjectReferences(*loadedProject, report);
 
   switch (report.getSeverity()) {
   case Severity::Critical:

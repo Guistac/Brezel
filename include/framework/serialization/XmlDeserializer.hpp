@@ -14,11 +14,11 @@
 
 namespace Xml {
 
-class ProjectLoadVisitor : public ProjectVisitor {
+class ComponentLoadVisitor : public ComponentVisitor {
 public:
-  ProjectLoadVisitor(Project &project, pugi::xml_node &root,
-                     DeserializationValidationReport &report)
-      : m_project(project), m_report(report) {
+  ComponentLoadVisitor(Project &project, pugi::xml_node &root, DeserializationValidationReport &report)
+      : m_project(project), m_report(report)
+  {
     nodeStack.push(root);
   }
 
@@ -26,100 +26,6 @@ public:
   void pathPop() {
     if (!m_pathStack.empty())
       m_pathStack.pop_back();
-  }
-
-  virtual bool beginProject() override {
-    if (auto projectXml = nodeStack.top().child(projectTagString)) {
-      pathPush("Project");
-      nodeStack.push(projectXml);
-      m_project.ids().loadState(projectXml);
-      return true;
-    }
-
-    m_report.addError(Severity::Critical, m_pathStack, "",
-                      "<Project> root xml tag is missing.");
-    return false;
-  }
-  virtual void endProject() override {
-    loadChildEntities(nullptr);
-    nodeStack.pop();
-    pathPop();
-  }
-
-  void loadChildEntities(Entity *parent) {
-    for (auto childEntitytXml : nodeStack.top().children(entityTagString)) {
-      nodeStack.push(childEntitytXml);
-      Entity loadedEntity = loadEntity(parent);
-      nodeStack.pop();
-    }
-  }
-
-  Entity loadEntity(Entity *parent) {
-    IdentityComponent identity;
-    bool b_uuidLoaded = true;
-    bool b_nameLoaded = true;
-    if (auto attr = nodeStack.top().attribute("Name"))
-      identity.name = attr.as_string();
-    else
-      b_nameLoaded = false;
-    if (auto attr = nodeStack.top().attribute("DisplayName"))
-      identity.displayName = attr.as_string();
-    else
-      identity.displayName = identity.name;
-    if (auto attr = nodeStack.top().attribute("UUID"))
-      identity.uuid.value = attr.as_ullong();
-    else
-      b_uuidLoaded = false;
-
-    identity.name = Project::sanitizeEntityName(identity.name);
-
-    Entity loadedEntity = m_project.restoreEntity(
-        identity.name, identity.displayName, identity.uuid);
-    if (b_nameLoaded) {
-      pathPush(identity.name);
-    } else
-      pathPush("?????");
-    m_currentEntity = loadedEntity;
-
-    if (!b_nameLoaded) {
-      m_report.addError(Severity::Warning, m_pathStack, "IdentityComponent",
-                        "Error resolving entity Name", loadedEntity);
-    } else if (identity.name.empty()) {
-      m_report.addError(Severity::Warning, m_pathStack, "IdentityComponent",
-                        "Entity name is empty", loadedEntity);
-    }
-    if (!b_uuidLoaded) {
-      m_report.addError(Severity::Critical, m_pathStack, "IdentityComponent",
-                        "Error resolving entity UUID", loadedEntity);
-    } else if (!identity.uuid.isValid()) {
-      m_report.addError(Severity::Critical, m_pathStack, "IdentityComponent",
-                        "Invalid UUID value", loadedEntity);
-    }
-
-    for (auto childXml : nodeStack.top().children()) {
-      std::string xmlTagName = childXml.name();
-      nodeStack.push(childXml);
-      if (xmlTagName == childrenTagString) {
-        loadChildEntities(&loadedEntity);
-      } else {
-        m_currentComponentType = xmlTagName;
-        if (!ComponentRegistry::addReflectEntityComponent(
-                loadedEntity.handle(), xmlTagName.c_str(), *this)) {
-          m_report.addError(
-              Severity::Critical, m_pathStack, m_currentComponentType,
-              "Component Type does not exist in registry", loadedEntity);
-        }
-      }
-      nodeStack.pop();
-    }
-    CommandStackVisitor visitor(&m_project.getStack());
-    ComponentRegistry::reflectEntityComponents(loadedEntity.handle(), visitor);
-
-    if (parent)
-      loadedEntity.setParent(*parent);
-
-    pathPop();
-    return loadedEntity;
   }
 
   pugi::xml_attribute getAttribute(const char *xmlTagName,
@@ -196,21 +102,25 @@ public:
                         m_currentEntity);
   }
 
-  virtual void visit_property(const char *label, VectorAccessorBase &va,
-                              std::initializer_list<Tag> tags) override {
-    if (!isPersistent(tags))
-      return;
-    if (beginList(label)) {
-      auto attr = nodeStack.top().attribute(listSizeTagString);
-      if (!attr) {
-        endList();
+  virtual void visit_property(const char *label, VectorAccessorBase &va, std::initializer_list<Tag> tags) override {
+    if (!isPersistent(tags)) return;
+
+    auto attr = nodeStack.top().attribute(listSizeTagString);
+    /*
+    if (!attr) {
         m_report.addError(
-            Severity::Warning, m_pathStack, m_currentComponentType,
-            "Error resolving List Size \"" + std::string(label) + "\"",
-            m_currentEntity);
+          Severity::Warning,
+          m_pathStack,
+          m_currentComponentType,
+          "Error resolving List Size \"" + std::string(label) + "\"",
+          m_currentEntity
+        );
         return;
       }
-      int listSize = attr.as_int();
+    */
+   size_t listSize = attr.as_int();
+
+    if (beginList(label, listSize)) {
       va.resize(listSize);
       for (size_t i = 0; i < listSize; i++) {
         char label[64];
@@ -221,7 +131,7 @@ public:
     }
   }
 
-  virtual bool beginList(const char *label) override {
+  virtual bool beginList(const char *label, size_t size) override {
     if (auto listXml = nodeStack.top().child(label)) {
       nodeStack.push(listXml);
       return true;
@@ -243,14 +153,78 @@ private:
   std::string m_currentComponentType;
 };
 
+
+
+
+
+
+
+
+  void loadEntity(Project& project, pugi::xml_node entityXmlNode, DeserializationValidationReport& report, Entity *parentEntity) {
+    IdentityComponent identity;
+    bool b_uuidLoaded = true;
+    bool b_nameLoaded = true;
+    if (auto attr = entityXmlNode.attribute("Name"))
+      identity.name = attr.as_string();
+    else b_nameLoaded = false;
+    if (auto attr = entityXmlNode.attribute("DisplayName"))
+      identity.displayName = attr.as_string();
+    else identity.displayName = identity.name;
+    if (auto attr = entityXmlNode.attribute("UUID"))
+      identity.uuid.value = attr.as_ullong();
+    else b_uuidLoaded = false;
+
+    identity.name = Project::sanitizeEntityName(identity.name);
+
+    Entity loadedEntity = project.restoreEntity(identity.name, identity.displayName, identity.uuid);
+    //if (b_nameLoaded) pathPush(identity.name);
+    //else pathPush("?????");
+    //m_currentEntity = loadedEntity;
+
+    //if (!b_nameLoaded) m_report.addError(Severity::Warning, m_pathStack, "IdentityComponent", "Error resolving entity Name", loadedEntity);
+    //else if (identity.name.empty()) m_report.addError(Severity::Warning, m_pathStack, "IdentityComponent", "Entity name is empty", loadedEntity);
+    //if (!b_uuidLoaded) m_report.addError(Severity::Critical, m_pathStack, "IdentityComponent", "Error resolving entity UUID", loadedEntity);
+    //else if (!identity.uuid.isValid()) m_report.addError(Severity::Critical, m_pathStack, "IdentityComponent", "Invalid UUID value", loadedEntity);
+
+    for (auto childXmlNode : entityXmlNode.children()) {
+      std::string xmlTagName = childXmlNode.name();
+      if (xmlTagName == childrenTagString) {
+          for(auto childEntityXml : childXmlNode.children(entityTagString)){
+            loadEntity(project, childEntityXml, report, &loadedEntity);
+          }
+      } else {
+        ComponentLoadVisitor visitor(project, childXmlNode, report);
+        if (!ComponentRegistry::addReflectEntityComponent( loadedEntity.handle(), xmlTagName.c_str(), visitor)) {
+          //m_report.addError(Severity::Critical, m_pathStack, m_currentComponentType, "Component Type does not exist in registry", loadedEntity);
+        }
+      }
+    }
+    CommandStackVisitor visitor(&project.getStack());
+    ComponentRegistry::reflectEntityComponents(loadedEntity.handle(), visitor);
+
+    if (parentEntity) {
+      loadedEntity.setParent(*parentEntity);
+    }
+  }
+
+
+
 // Not intended for user, use Application::loadProject()
-inline bool loadProject(Project &project, std::string_view filepath,
-                        DeserializationValidationReport &report) {
+inline bool loadProject(Project &project, std::string_view filepath, DeserializationValidationReport &report) {
   pugi::xml_document doc;
-  if (!doc.load_file(filepath.data()))
-    return false;
-  ProjectLoadVisitor loader(project, doc, report);
-  project.reflect(loader);
+  if (!doc.load_file(filepath.data())) return false;
+
+  auto projectXml = doc.child(projectTagString);
+  if(auto nameAttribute = projectXml.attribute("Name")){
+    project.m_name = nameAttribute.as_string();
+  }
+  //if(!projectXml) report.addError(Severity::Critical, m_pathStack, "", "<Project> root xml tag is missing.");
+  project.ids().loadState(projectXml);
+
+  for(auto childEntityXml : projectXml.children(entityTagString)){
+    loadEntity(project, childEntityXml, report, nullptr);
+  }
+
   return true;
 }
 
