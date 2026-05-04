@@ -51,7 +51,10 @@ public:
         comment.set_value(str.c_str());
 
         push(entityTagString);
-        nodeStack.top().append_attribute("Name") = identity.name;
+        nodeStack.top().append_attribute("Name") = identity.name.c_str();
+        if (!identity.displayName.empty() && identity.displayName != identity.name) {
+            nodeStack.top().append_attribute("DisplayName") = identity.displayName.c_str();
+        }
         nodeStack.top().append_attribute("UUID") = identity.uuid.value;
         return true;
     }

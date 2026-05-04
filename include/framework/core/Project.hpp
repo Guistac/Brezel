@@ -26,22 +26,30 @@ public:
     CommandStack&    getStack()      { return m_commandStack; }
 
 
-    // INTENT: User creates something brand new in the editor
-    Entity createEntity(std::string_view name) {
-        UUID newId = m_idProvider->generate();
-        return instantiateEntity(name, newId);
+    static std::string sanitizeEntityName(std::string_view name) {
+        std::string sanitized;
+        for (char c : name) {
+            if (std::isalnum(c) || c == '_' || c == '-') {
+                sanitized += c;
+            } else {
+                sanitized += '_';
+            }
+        }
+        if (sanitized.empty()) sanitized = "Entity";
+        return sanitized;
     }
 
-    // INTENT: The XML loader is reconstructing an existing entity
-    // We pass the ID explicitly from the file
-    Entity restoreEntity(std::string_view name, UUID existingId) {
-        // Safety check: ensure the loader isn't trying to 
-        // restore an ID that's already alive in the project
+    Entity createEntity(std::string_view displayName) {
+        UUID newId = m_idProvider->generate();
+        std::string strictName = sanitizeEntityName(displayName);
+        return instantiateEntity(strictName, displayName, newId);
+    }
+
+    Entity restoreEntity(std::string_view name, std::string_view displayName, UUID existingId) {
         if (entitiesByUUID.contains(existingId)) {
-            //throw DataIntegrityException("Critical: Restore failed. ID already exists.");
         }
         m_idProvider->markAsUsed(existingId);
-        return instantiateEntity(name, existingId);
+        return instantiateEntity(name, displayName, existingId);
     }
 
     // Optional: A helper to destroy entities safely
@@ -59,6 +67,45 @@ public:
         auto it = entitiesByUUID.find(uuid);
         if (it != entitiesByUUID.end()) return it->second; 
         else return Entity(m_registry);
+    }
+
+    Entity getEntityByPath(std::string_view path) {
+        if (path.empty()) return Entity(m_registry);
+        
+        std::vector<std::string_view> tokens;
+        size_t start = 0, end = 0;
+        while ((end = path.find('/', start)) != std::string_view::npos) {
+            tokens.push_back(path.substr(start, end - start));
+            start = end + 1;
+        }
+        tokens.push_back(path.substr(start));
+
+        Entity current(m_registry);
+        auto view = m_registry.view<IdentityComponent>();
+        for (auto e : view) {
+            if (view.get<IdentityComponent>(e).name == tokens[0]) {
+                current = Entity(e, m_registry);
+                break;
+            }
+        }
+
+        if (!current) return current;
+
+        for (size_t i = 1; i < tokens.size(); ++i) {
+            bool found_child = false;
+            auto& hier = current.get<HierarchyComponent>();
+            for (auto child_e : hier.children) {
+                Entity child(child_e, m_registry);
+                if (child.has<IdentityComponent>() && child.get<IdentityComponent>().name == tokens[i]) {
+                    current = child;
+                    found_child = true;
+                    break;
+                }
+            }
+            if (!found_child) return Entity(m_registry);
+        }
+
+        return current;
     }
 
     void reflect(ProjectVisitor& visitor){
@@ -80,11 +127,12 @@ public:
     std::string m_name;
 private:
 
-    Entity instantiateEntity(std::string_view name, UUID id) {
+    Entity instantiateEntity(std::string_view name, std::string_view displayName, UUID id) {
         auto handle = m_registry.create();
         
         m_registry.emplace<IdentityComponent>(handle, IdentityComponent{
             .name = std::string(name), 
+            .displayName = std::string(displayName),
             .uuid = id
         });
         m_registry.emplace<HierarchyComponent>(handle);

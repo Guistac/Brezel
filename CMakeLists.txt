@@ -33,4 +33,5 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     EnTT
     spdlog::spdlog
     pugixml
+    readline
 )

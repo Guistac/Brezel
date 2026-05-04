@@ -18,6 +18,7 @@ namespace ComponentRegistry{
         std::string saveString;
         std::function<void(entt::handle, ComponentVisitor&)> reflect;
         std::function<void(entt::handle)> createComponent;
+        std::function<bool(entt::handle)> hasComponent;
     };
 
     inline std::unordered_map<entt::id_type, ComponentTypeInfo> componentInfoById;
@@ -34,6 +35,9 @@ namespace ComponentRegistry{
         };
         info.createComponent = [](entt::handle handle){
             auto& component = handle.get_or_emplace<T>();
+        };
+        info.hasComponent = [](entt::handle handle){
+            return handle.try_get<T>() != nullptr;
         };
         entt::id_type componentId = entt::type_id<T>().hash();
         componentInfoById[componentId] = info;
@@ -64,6 +68,20 @@ namespace ComponentRegistry{
                 visitor.endComponent();
             }
             return true;
+        }
+        return false;
+    }
+
+    inline bool reflectEntityComponent(entt::handle handle, const char* componentTypeName, ComponentVisitor& visitor){
+        if(componentInfoByTypeName.contains(componentTypeName)){
+            auto& info = componentInfoByTypeName[componentTypeName];
+            if(info.hasComponent(handle)){
+                if(visitor.beginComponent(componentTypeName)){
+                    info.reflect(handle, visitor);
+                    visitor.endComponent();
+                }
+                return true;
+            }
         }
         return false;
     }

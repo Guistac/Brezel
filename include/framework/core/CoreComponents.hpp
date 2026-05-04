@@ -12,5 +12,6 @@ struct HierarchyComponent {
 
 struct IdentityComponent {
     std::string name;
+    std::string displayName;
     UUID uuid;
 };
