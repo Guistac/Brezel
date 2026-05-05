@@ -136,7 +136,9 @@ inline bool saveProject(Project& project, std::string_view filepath) {
     pugi::xml_document doc;
 
     auto projectXml = doc.append_child(projectTagString);
+    
     projectXml.append_attribute("Name") = project.getName();
+
     project.ids().saveState(projectXml);
 
     project.forEachTopLevelEntity(saveEntity, projectXml);

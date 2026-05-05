@@ -15,7 +15,7 @@ public:
     virtual UUID generate() = 0;
     
     virtual void saveState(pugi::xml_node& root) const = 0;
-    virtual void loadState(pugi::xml_node& root) = 0;
+    virtual bool loadState(pugi::xml_node& root) = 0;
     
     // Validation using the UUID type
     virtual bool isUsed(UUID id) const = 0;
@@ -38,11 +38,14 @@ public:
         node.append_attribute("NextID") = m_nextId;
     }
 
-    void loadState(pugi::xml_node& root) override {
-        auto node = root.child("IDGeneratorState");
-        if (node) {
-            m_nextId = node.attribute("NextID").as_ullong(1);
+    bool loadState(pugi::xml_node& root) override {
+        if(auto node = root.child("IDGeneratorState")){
+            if(auto attr = node.attribute("NextID")){
+                m_nextId = attr.as_ullong();
+                return true;
+            }
         }
+        return false;
     }
 
     bool isUsed(UUID id) const override {

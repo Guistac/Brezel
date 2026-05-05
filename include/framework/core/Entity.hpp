@@ -68,6 +68,36 @@ public:
         }
     }
 
+    Entity getParent(){
+        if(auto hierarchy = try_get<HierarchyComponent>()){
+            return Entity(hierarchy->parent, registry());
+        }
+        return Entity();
+    }
+
+    const char* getName(){
+        if(auto identity = try_get<IdentityComponent>()){
+            return identity->name.c_str();
+        }
+        return "";
+    }
+
+    std::vector<std::string> getPath(){
+        std::vector<std::string> path;
+        std::function<void(Entity)> addParentToPath = [&](Entity entity){
+            Entity parent = entity.getParent();
+            if(parent.isValid()){
+                std::string parentName = parent.getName();
+                path.push_back(parentName);
+                addParentToPath(parent);
+            }
+        };
+        path.push_back(getName());
+        addParentToPath(*this);
+        std::reverse(path.begin(), path.end());
+        return path;
+    }
+
 private:
     entt::handle m_handle;
 };

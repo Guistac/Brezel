@@ -25,23 +25,9 @@ public:
     entt::registry&  getRegistry()   { return m_registry; }
     CommandStack&    getStack()      { return m_commandStack; }
 
-
-    static std::string sanitizeEntityName(std::string_view name) {
-        std::string sanitized;
-        for (char c : name) {
-            if (std::isalnum(c) || c == '_' || c == '-') {
-                sanitized += c;
-            } else {
-                sanitized += '_';
-            }
-        }
-        if (sanitized.empty()) sanitized = "Entity";
-        return sanitized;
-    }
-
     Entity createEntity(std::string_view displayName) {
         UUID newId = m_idProvider->generate();
-        std::string strictName = sanitizeEntityName(displayName);
+        std::string strictName = sanitizeName(displayName);
         return instantiateEntity(strictName, displayName, newId);
     }
 
@@ -119,6 +105,19 @@ public:
         }
 
         return current;
+    }
+
+    static std::string sanitizeName(std::string_view name) {
+        std::string sanitized;
+        for (char c : name) {
+            if (std::isalnum(c) || c == '_' || c == '-') {
+                sanitized += c;
+            } else {
+                sanitized += '_';
+            }
+        }
+        if (sanitized.empty()) sanitized = "Entity";
+        return sanitized;
     }
 
     IDProvider& ids() { return *m_idProvider; }
