@@ -2,3 +2,13 @@ build/
 .DS_Store
 .agentignore
 .cache/
+.aider*
+*.xml
+*.o
+Brezel
+CMakeCache.txt
+CMakeFiles/
+Makefile
+cmake_install.cmake
+compile_commands.json
+build_errors.txt

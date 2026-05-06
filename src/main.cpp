@@ -1,14 +1,12 @@
-#include "framework/app/Application.hpp"
-#include "framework/commands/PropertyCommand.hpp"
-#include "framework/console/Console.hpp"
-#include "framework/core/Project.hpp"
-#include "framework/serialization/ConsoleVisitor.hpp"
-#include "framework/serialization/XmlDeserializer.hpp"
-#include "framework/serialization/XmlSerializer.hpp"
-
+#include "Brezel/App/Application.hpp"
+#include "Brezel/Command/PropertyCommand.hpp"
+#include "Brezel/Console/Console.hpp"
+#include "Brezel/Console/InteractiveConsole.hpp"
+#include "Brezel/Core/Project.hpp"
+#include "Brezel/Serialization/ConsoleVisitor.hpp"
 #include <spdlog/spdlog.h>
-#include <iostream>
-#include "framework/console/InteractiveConsole.hpp"
+
+using namespace Brezel;
 
 struct Motor : BaseComponent {
   Parameter<float> speed{"speed", 0.0f};
@@ -45,11 +43,11 @@ int main() {
   ComponentRegistry::registerComponent<Motor>("Motor");
   ComponentRegistry::registerComponent<TestComponent>("TestComponent");
 
-  Project* proj = Application::createProject("DefaultProject");
+  Project *proj = Application::createProject("DefaultProject");
 
   Entity motorObj = proj->createEntity("Motor");
-  auto& motor = motorObj.add<Motor>();
-  auto& test = motorObj.add<TestComponent>();
+  auto &motor = motorObj.add<Motor>();
+  auto &test = motorObj.add<TestComponent>();
 
   Entity motorObjChild = proj->createEntity("Motor_2");
   motorObjChild.get<IdentityComponent>().displayName = "Motor 2";
@@ -67,13 +65,21 @@ int main() {
 
   test.motorRef.set(motorObjChild2);
 
-  motor.speed.onChange.connect([](const float& newSpeed) {
-      spdlog::info("Speed updated to {}", newSpeed);
+  motor.speed.onChange.connect([](const float &newSpeed) {
+    spdlog::info("Speed updated to {}", newSpeed);
   });
   motor.speed.set(45.5f);
 
-  if(Application::saveProject(proj, "project_alpha.xml")){
-      spdlog::info("Successfully saved project to XML!");
+  Parameter<float> timeParam("duration", 10.0f);
+  ParameterOptions timeOptions;
+  timeOptions.unit = "s";
+  timeOptions.format = FormatType::Time;
+  timeParam.setOptions(timeOptions);
+  spdlog::info("Param '{}' unit: {}", timeParam.name(),
+               timeParam.getOptions().unit);
+
+  if (Application::saveProject(proj, "project_alpha.xml")) {
+    spdlog::info("Successfully saved project to XML!");
   }
 
   if (Project *loadedProj = Application::loadProject("project_alpha.xml")) {
@@ -86,7 +92,7 @@ int main() {
         [](const std::string &msg) { spdlog::info("{}", msg); });
 
     spdlog::info("--- Interactive Console Started. Type 'exit' to quit. ---");
-    
+
     CLI::runInteractive(console);
   }
 
