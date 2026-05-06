@@ -126,7 +126,7 @@ public:
         auto view = m_project.getRegistry()
                         .view<HierarchyComponent, IdentityComponent>();
         for (auto e : view) {
-          if (view.get<HierarchyComponent>(e).parent == entt::null) {
+          if (!view.get<HierarchyComponent>(e).parent) {
             std::string_view name = view.get<IdentityComponent>(e).name;
             if (name.starts_with(childPrefix)) {
               addEntityMatches(Entity(e, m_project.getRegistry()), "", std::string(name));
@@ -137,8 +137,7 @@ public:
         Entity parent = m_project.getEntityByPath(parentPath);
         if (parent) {
           auto &hier = parent.get<HierarchyComponent>();
-          for (auto child_e : hier.children) {
-            Entity child(child_e, m_project.getRegistry());
+          for (auto child : hier.children) {
             if (child.has<IdentityComponent>()) {
               std::string_view name = child.get<IdentityComponent>().name;
               if (name.starts_with(childPrefix)) {
@@ -300,8 +299,7 @@ private:
     auto &hier = entity.get<HierarchyComponent>();
     if (!hier.children.empty()) {
       out += "Children:\n";
-      for (auto child_e : hier.children) {
-        Entity child(child_e, m_project.getRegistry());
+      for (auto child : hier.children) {
         if (child.has<IdentityComponent>()) {
           auto &id = child.get<IdentityComponent>();
           out += "  - " + id.name + " (\"" + id.displayName + "\")\n";

@@ -107,7 +107,7 @@ inline bool saveEntity(Entity& entity, pugi::xml_node parentXmlNode){
     }
 
     ComponentSaveVisitor visitor(entityXml);
-    ComponentRegistry::reflectEntityComponents(entity.handle(), visitor);
+    ComponentRegistry::reflectEntityComponents(entity, visitor);
 
     auto childrenXml = entityXml.append_child(childrenTagString);
     entity.forEachChildEntity(saveEntity, childrenXml);

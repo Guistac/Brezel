@@ -3,6 +3,7 @@
 #include "Brezel/Console/Console.hpp"
 #include "Brezel/Console/InteractiveConsole.hpp"
 #include "Brezel/Core/Project.hpp"
+#include "Brezel/Core/ComponentRegistry.hpp"
 #include "Brezel/Serialization/ConsoleVisitor.hpp"
 #include <spdlog/spdlog.h>
 

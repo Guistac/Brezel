@@ -265,9 +265,9 @@ inline void loadEntity(Project& project, pugi::xml_node entityXmlNode, Deseriali
           }
       } else {
         ComponentLoadVisitor visitor(loadedEntity, childXmlNode, report);
-        if (!ComponentRegistry::addReflectEntityComponent( loadedEntity.handle(), StringID::from(xmlTagName), visitor))
+        if (!ComponentRegistry::addReflectEntityComponent( loadedEntity, StringID::from(xmlTagName), visitor))
           report.addError(
-            Severity::Critical,
+            Severity::Warning,
             entityPath,
             xmlTagName,
             "Component Type does not exist in registry",
@@ -275,7 +275,7 @@ inline void loadEntity(Project& project, pugi::xml_node entityXmlNode, Deseriali
       }
     }
     CommandStackVisitor visitor(&project.getStack());
-    ComponentRegistry::reflectEntityComponents(loadedEntity.handle(), visitor);
+    ComponentRegistry::reflectEntityComponents(loadedEntity, visitor);
 }
 
 

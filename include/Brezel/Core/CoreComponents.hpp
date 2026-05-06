@@ -1,14 +1,14 @@
 #pragma once
 #include <vector>
 #include <string>
-#include <entt/entt.hpp>
 #include "Brezel/Core/UUID.hpp"
+#include "Brezel/Core/Entity.hpp"
 
 namespace Brezel {
 
 struct HierarchyComponent {
-    entt::entity parent{ entt::null };
-    std::vector<entt::entity> children;
+    Entity parent;
+    std::vector<Entity> children;
 };
 
 struct IdentityComponent {

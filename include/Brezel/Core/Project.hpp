@@ -11,6 +11,9 @@
 
 namespace Brezel {
 
+/// @brief Represents a single Brezel project, containing all entities and systems.
+/// @details The Project class owns the EnTT registry and the command stack.
+/// It serves as the top-level container for a simulation or game scene.
 class Project {
 public:
     Project(std::string_view name) :
@@ -23,21 +26,31 @@ public:
     Project(const Project&) = delete;
     Project& operator=(const Project&) = delete;
 
+    /// @brief Returns the name of the project.
     std::string_view getName() const { return m_name; }
+
+    /// @brief Provides direct access to the underlying EnTT registry.
     entt::registry&  getRegistry()   { return m_registry; }
+
+    /// @brief Returns the project's undo/redo command stack.
     CommandStack&    getStack()      { return m_commandStack; }
 
+    /// @brief Creates a new entity with a unique ID and default components.
+    /// @param displayName A human-readable name (not necessarily unique).
+    /// @return A new Entity handle.
     Entity createEntity(std::string_view displayName) {
         UUID newId = m_idProvider->generate();
         std::string strictName = sanitizeName(displayName);
         return instantiateEntity(strictName, displayName, newId);
     }
 
+    /// @brief Restores an entity during loading (preserving its original UUID).
     Entity restoreEntity(std::string_view name, std::string_view displayName, UUID existingId) {
         m_idProvider->markAsUsed(existingId);
         return instantiateEntity(name, displayName, existingId);
     }
 
+    /// @brief Permanently removes an entity from the project.
     void destroyEntity(Entity& ent) {
         if(ent.has<IdentityComponent>()){
             auto identity = ent.get<IdentityComponent>();
@@ -48,24 +61,29 @@ public:
         }
     }
 
+    /// @brief Fast lookup of an entity by its unique UUID.
     Entity getEntityByUUID(UUID uuid) {
         auto it = entitiesByUUID.find(uuid);
         if (it != entitiesByUUID.end()) return it->second; 
         else return Entity(m_registry);
     }
 
+    /// @brief Iterates over all entities that do not have a parent.
+    /// @param callback A function taking (Entity ent).
     template<typename Func, typename... Args>
     void forEachTopLevelEntity(Func&& callback, Args&&... args) {
         auto view = m_registry.view<HierarchyComponent>();
         for (auto entityHandle : view) {
             const auto& hierarchy = view.get<HierarchyComponent>(entityHandle);
-            if (hierarchy.parent == entt::null) {
+            if (!hierarchy.parent) {
                 Entity ent(entityHandle, m_registry);
                 std::invoke(std::forward<Func>(callback), ent, std::forward<Args>(args)...);
             }
         }
     }
 
+    /// @brief Resolves an entity handle from a path string (e.g., "Parent/Child/Grandchild").
+    /// @return An Entity handle (check isValid() to see if lookup succeeded).
     Entity getEntityByPath(std::string_view path) {
         if (path.empty()) return Entity(m_registry);
         
@@ -91,8 +109,7 @@ public:
         for (size_t i = 1; i < tokens.size(); ++i) {
             bool found_child = false;
             auto& hier = current.get<HierarchyComponent>();
-            for (auto child_e : hier.children) {
-                Entity child(child_e, m_registry);
+            for (auto child : hier.children) {
                 if (child.has<IdentityComponent>() && child.get<IdentityComponent>().name == tokens[i]) {
                     current = child;
                     found_child = true;
@@ -105,6 +122,7 @@ public:
         return current;
     }
 
+    /// @brief Converts a display name into a "strict" path-safe name.
     static std::string sanitizeName(std::string_view name) {
         std::string sanitized;
         for (char c : name) {
@@ -118,6 +136,7 @@ public:
         return sanitized;
     }
 
+    /// @brief Accesses the project's ID generation system.
     IDProvider& ids() { return *m_idProvider; }
 
     std::string m_name;
