@@ -1,55 +1,30 @@
 # AGENTS.md — Brezel
 
 ## Project Overview
-C++23 realtime application framework using EnTT ECS. README.md is a full architecture spec; the code is a partial implementation. Trust the code over the spec.
+C++23 realtime application framework using EnTT ECS.
+**Important:** `docs/Framework_Guide.md` is the absolute source of truth for architecture, constraints, and UI integration. 
+**You MUST keep `docs/Framework_Guide.md` updated whenever you make architectural or API changes.**
 
-## Build
+## Build & Run
 ```bash
-git submodule update --init --recursive   # first clone only
-cmake -S . -B . && make                    # configure + build
+cmake -S . -B . && make
+./Brezel
 ```
-- In-source build (CMake outputs to root, not `build/`)
-- `file(GLOB_RECURSE)` in CMakeLists.txt — new `.cpp` files in `src/` auto-pick up
-- Links: EnTT, spdlog, pugixml, readline (system)
-- `compile_commands.json` is generated — clangd works
+- CMake outputs to root, not `build/`. New `.cpp` files in `src/` are auto-picked up via globbing.
+- Dependencies (EnTT, spdlog, pugixml) are in `extern/` (git submodules).
 
-## Source Layout
-- `include/framework/` — all headers, zero `.cpp` files (header-only framework)
-- `src/main.cpp` — only cpp file; also contains demo components (Motor, TestComponent)
-- `extern/` — git submodules (entt, spdlog, pugixml) — ignore these
+## Codebase Map
+- `include/Brezel/` — Framework headers. It is a strictly header-only library.
+- `src/main.cpp` — Main entry point and component testbed.
+- `docs/Framework_Guide.md` — The strict architectural rulebook.
 
-## Architecture (Actual)
-- **EnTT ECS** is the data model, NOT an Object tree with `unique_ptr` children. Entities are `entt::entity` handles; hierarchy lives in `HierarchyComponent`.
-- **Pure POD Components**: Components must be pure C++ structs. No inheritance, no virtual methods, no `Parameter<T>` wrappers. This ensures Real-Time (RT) safety.
-- **External Reflection**: Reflection is done via a static free-function `template<typename V> void reflect(Component& c, V& v)`. 
-- **Tag system**: `Tag::Persistent` (XML), `Tag::CommandStack` (undo), `Tag::Hidden`, etc.
-- Components must be registered: `ComponentRegistry::registerComponent<T>("Name")`. The name becomes the XML element tag.
-- **State Mutation**: Use `ValueChangeCommand<T>` for Undo/Redo. Trigger `registry.patch<T>()` to emit `on_update` signals for NRT listeners.
-- **Documentation**: All architecture rules and usage patterns are documented in `docs/Framework_Guide.md`. **You MUST keep `docs/Framework_Guide.md` updated whenever you make architectural or API changes.**
-
-## Not Yet Implemented (per README spec)
-Lua scripting, node graphs, realtime thread, SharedBuffers, remote GUI, ImGui, `ObjectHandle<T>`, `StringID`, custom Logger (spdlog used instead), allocators.
-
-## Gotchas
-- `Parameter<T>::toString()/fromString()` only implemented for `float` and `std::string`. Int/bool will silently break.
-- `CommandStack::redo()` does not exist yet.
+## Gotchas & Conventions
+- **No Parameters**: `Parameter<T>` has been completely purged. Components must remain pure POD structs.
 - `Application` is an `inline namespace` with global state, not a class.
-- `Parameter<T>::set()` is defined in `PropertyCommand.hpp` (circular dep break). If you touch Parameter, check PropertyCommand.
-- Everything lives in the global namespace except `Xml::`, `CLI::`, `Application::`.
-- No tests, no CI, no `.clang-format`, no linter.
+- `EntityReference` stores both a UUID and a live `Entity` handle.
+- `#pragma once` in all headers. No `.clang-format`, no linter.
 
-## Conventions
-- `#pragma once` in all headers
-- `EntityReference` stores both a UUID and a live `Entity` handle (not pure ID-based like the spec's `ObjectHandle`)
-- `Project::m_name` is public (serializer writes to it directly)
-
-# Agent Instructions
-- You are an autonomous developer agent.
-- You have full permission to edit files in this repository.
-- NEVER tell the user you cannot access their filesystem.
-- When a change is agreed upon, immediately use the `write_file` tool.
-
-# 16GB RAM Constraints
-- DO NOT use the `task` or `subagent` tools. 
-- You must perform all file edits (write_file) and terminal commands yourself in this single session.
-- If a task is too large, break it down into smaller steps within this chat.
+## Agent Constraints
+- **16GB RAM Constraint:** DO NOT use the `task` or `subagent` tools. You must perform all file edits and terminal commands yourself in this single session.
+- Break large tasks into smaller conversational steps.
+- When a change is agreed upon, implement it immediately.
