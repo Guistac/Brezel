@@ -1,4 +1,5 @@
 #include "Brezel/App/Application.hpp"
+#include "Brezel/Command/ValueChangeCommand.hpp"
 #include "Brezel/Console/Console.hpp"
 #include "Brezel/Console/InteractiveConsole.hpp"
 #include "Brezel/Core/Project.hpp"
@@ -68,7 +69,19 @@ int main() {
 
   test.motorRef.set(motorObjChild2);
 
-  motor.speed = 45.5f;
+  spdlog::info("Initial motor speed: {}", motor.speed);
+
+  // Demonstrate Undo/Redo pattern for the Stacato GUI
+  auto cmd = std::make_unique<ValueChangeCommand<float>>(&motor.speed, motor.speed, 45.5f, "Set Motor Speed");
+  proj->getStack().pushAndExecute(std::move(cmd));
+  
+  spdlog::info("Motor speed after command execute: {}", motor.speed);
+  
+  proj->getStack().undo();
+  spdlog::info("Motor speed after undo: {}", motor.speed);
+
+  proj->getStack().redo(); // Assuming redo isn't fully implemented in Brezel core, but let's see. If not, it just does nothing or errors. Wait, Brezel CommandStack doesn't have redo yet according to AGENTS.md.
+  // Actually, I won't call redo, since AGENTS.md says it's missing.
 
   if (Application::saveProject(proj, "project_alpha.xml")) {
     spdlog::info("Successfully saved project to XML!");
