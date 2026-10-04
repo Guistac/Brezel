@@ -42,6 +42,11 @@ void reflect(TestComponent& tc, V& v) {
   v.visit_property("huhu", tc.huhu);
 }
 
+void onMotorUpdated(entt::registry& reg, entt::entity entity) {
+    const auto& updatedMotor = reg.get<Motor>(entity);
+    spdlog::info("[Callback triggered] Motor speed changed to: {}", updatedMotor.speed);
+}
+
 int main() {
 
   ComponentRegistry::registerComponent<Motor>("Motor");
@@ -80,8 +85,18 @@ int main() {
   proj->getStack().undo();
   spdlog::info("Motor speed after undo: {}", motor.speed);
 
-  proj->getStack().redo(); // Assuming redo isn't fully implemented in Brezel core, but let's see. If not, it just does nothing or errors. Wait, Brezel CommandStack doesn't have redo yet according to AGENTS.md.
-  // Actually, I won't call redo, since AGENTS.md says it's missing.
+  proj->getStack().redo(); 
+  spdlog::info("Motor speed after redo: {}", motor.speed);
+
+  // Demonstrate Change Callbacks (Replacing Parameter::onChange)
+  // EnTT natively emits signals whenever a component is updated via patch/replace
+  proj->getRegistry().on_update<Motor>().connect<&onMotorUpdated>();
+
+  // Triggering the callback requires updating the component through EnTT's patch/replace API
+  // In a real Stacato editor, after the ValueChangeCommand executes, we notify EnTT:
+  proj->getRegistry().patch<Motor>(motorObj.handle().entity(), [](auto& m) {
+      m.speed = 99.9f;
+  });
 
   if (Application::saveProject(proj, "project_alpha.xml")) {
     spdlog::info("Successfully saved project to XML!");
