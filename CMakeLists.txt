@@ -5,33 +5,84 @@ project(Brezel LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Check if Brezel is built as a top-level project
+if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
+    set(BREZEL_STANDALONE ON)
+else()
+    set(BREZEL_STANDALONE OFF)
+endif()
+
 # --- Add Dependencies (Submodules) ---
-# EnTT (Header only)
-add_subdirectory(extern/entt)
+if(BREZEL_STANDALONE)
+    # EnTT (Header only)
+    add_subdirectory(extern/entt)
 
-# Spdlog (Fast logging)
-add_subdirectory(extern/spdlog)
+    # Spdlog (Fast logging)
+    add_subdirectory(extern/spdlog)
 
-# TinyXML2
-add_subdirectory(extern/tinyxml2)
+    # TinyXML2
+    add_subdirectory(extern/tinyxml2)
+endif()
 
 # --- Framework Library ---
-# Collect all source files
-file(GLOB_RECURSE SOURCES "src/*.cpp")
-
-add_executable(${PROJECT_NAME} ${SOURCES})
+if(BREZEL_STANDALONE)
+    # Collect all source files
+    file(GLOB_RECURSE SOURCES "src/*.cpp")
+    add_executable(${PROJECT_NAME} ${SOURCES})
+else()
+    # When built as a submodule in Stacato, it might be header-only
+    file(GLOB_RECURSE SOURCES "src/*.cpp")
+    list(REMOVE_ITEM SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp")
+    
+    if(SOURCES)
+        add_library(${PROJECT_NAME} STATIC ${SOURCES})
+    else()
+        add_library(${PROJECT_NAME} INTERFACE)
+    endif()
+endif()
 
 # --- Include Paths ---
-target_include_directories(${PROJECT_NAME} PUBLIC 
-    include
-    extern/entt/src
-    extern/tinyxml2
-)
+if(BREZEL_STANDALONE)
+    target_include_directories(${PROJECT_NAME} PUBLIC 
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
+else()
+    if(SOURCES)
+        target_include_directories(${PROJECT_NAME} PUBLIC 
+            ${CMAKE_CURRENT_SOURCE_DIR}/include
+        )
+    else()
+        target_include_directories(${PROJECT_NAME} INTERFACE 
+            ${CMAKE_CURRENT_SOURCE_DIR}/include
+        )
+    endif()
+endif()
 
-# --- Link Libraries ---
-target_link_libraries(${PROJECT_NAME} PRIVATE 
-    EnTT
-    spdlog::spdlog
-    tinyxml2
-    readline
-)
+if(BREZEL_STANDALONE)
+    target_include_directories(${PROJECT_NAME} PUBLIC 
+        ${CMAKE_CURRENT_SOURCE_DIR}/extern/entt/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/extern/tinyxml2
+    )
+    # --- Link Libraries ---
+    target_link_libraries(${PROJECT_NAME} PRIVATE 
+        EnTT
+        spdlog::spdlog
+        tinyxml2
+        readline
+    )
+else()
+    # --- Link Libraries ---
+    if(SOURCES)
+        target_link_libraries(${PROJECT_NAME} PRIVATE 
+            entt
+            spdlog
+            tinyxml2
+        )
+    else()
+        target_link_libraries(${PROJECT_NAME} INTERFACE 
+            entt
+            spdlog
+            tinyxml2
+        )
+    endif()
+endif()
