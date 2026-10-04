@@ -18,11 +18,14 @@ cmake -S . -B . && make                    # configure + build
 - `src/main.cpp` — only cpp file; also contains demo components (Motor, TestComponent)
 - `extern/` — git submodules (entt, spdlog, pugixml) — ignore these
 
-## Architecture (Actual, Not Spec)
+## Architecture (Actual)
 - **EnTT ECS** is the data model, NOT an Object tree with `unique_ptr` children. Entities are `entt::entity` handles; hierarchy lives in `HierarchyComponent`.
-- **Visitor-based reflection**: every component implements `reflect(ComponentVisitor&)`. One reflect drives serialization, undo, CLI, and debug via tag filtering.
-- **Tag system**: `Tag::Persistent` (XML), `Tag::CommandStack` (undo), `Tag::Hidden`, `Tag::ReadOnly`, `Tag::Networked`, etc.
-- Components must derive from `BaseComponent` and be registered: `ComponentRegistry::registerComponent<T>("Name")`. The name becomes the XML element tag.
+- **Pure POD Components**: Components must be pure C++ structs. No inheritance, no virtual methods, no `Parameter<T>` wrappers. This ensures Real-Time (RT) safety.
+- **External Reflection**: Reflection is done via a static free-function `template<typename V> void reflect(Component& c, V& v)`. 
+- **Tag system**: `Tag::Persistent` (XML), `Tag::CommandStack` (undo), `Tag::Hidden`, etc.
+- Components must be registered: `ComponentRegistry::registerComponent<T>("Name")`. The name becomes the XML element tag.
+- **State Mutation**: Use `ValueChangeCommand<T>` for Undo/Redo. Trigger `registry.patch<T>()` to emit `on_update` signals for NRT listeners.
+- **Documentation**: All architecture rules and usage patterns are documented in `docs/Framework_Guide.md`. **You MUST keep `docs/Framework_Guide.md` updated whenever you make architectural or API changes.**
 
 ## Not Yet Implemented (per README spec)
 Lua scripting, node graphs, realtime thread, SharedBuffers, remote GUI, ImGui, `ObjectHandle<T>`, `StringID`, custom Logger (spdlog used instead), allocators.
