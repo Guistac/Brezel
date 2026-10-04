@@ -12,8 +12,8 @@ add_subdirectory(extern/entt)
 # Spdlog (Fast logging)
 add_subdirectory(extern/spdlog)
 
-# Pugixml
-add_subdirectory(extern/pugixml)
+# TinyXML2
+add_subdirectory(extern/tinyxml2)
 
 # --- Framework Library ---
 # Collect all source files
@@ -25,13 +25,13 @@ add_executable(${PROJECT_NAME} ${SOURCES})
 target_include_directories(${PROJECT_NAME} PUBLIC 
     include
     extern/entt/src
-    extern/pugixml/src
+    extern/tinyxml2
 )
 
 # --- Link Libraries ---
 target_link_libraries(${PROJECT_NAME} PRIVATE 
     EnTT
     spdlog::spdlog
-    pugixml
+    tinyxml2
     readline
 )

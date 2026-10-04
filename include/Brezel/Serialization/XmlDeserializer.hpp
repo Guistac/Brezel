@@ -1,6 +1,6 @@
 #pragma once
 #include <stack>
-#include <pugixml.hpp>
+#include <tinyxml2.h>
 #include "Brezel/Serialization/DeserializationValidation.hpp"
 #include "Brezel/Serialization/XmlCommon.hpp"
 #include "Brezel/Core/EntityReference.hpp"
@@ -14,17 +14,17 @@ namespace Xml {
 
 class ComponentLoadVisitor : public ComponentVisitor {
 public:
-  ComponentLoadVisitor(Entity& entity, pugi::xml_node &root, DeserializationValidationReport &report)
+  ComponentLoadVisitor(Entity& entity, tinyxml2::XMLElement *root, DeserializationValidationReport &report)
       : m_entity(entity), m_report(report)
   {
     nodeStack.push(root);
   }
 
-  pugi::xml_attribute getAttribute(StringID xmlTagName, const char *attributeName) {
-    if (auto tag = nodeStack.top().child(xmlTagName.toString().c_str())) {
-      return tag.attribute(attributeName);
+  const char* getAttribute(StringID xmlTagName, const char *attributeName) {
+    if (auto tag = nodeStack.top()->FirstChildElement(xmlTagName.toString().c_str())) {
+      return tag->Attribute(attributeName);
     }
-    return pugi::xml_attribute();
+    return nullptr;
   }
 
   virtual bool beginComponent(StringID componentTypeName) override {
@@ -35,7 +35,7 @@ public:
 
   virtual void visit_property(StringID label, std::string &str, std::initializer_list<Tag> tags) override {
     if (!isPersistent(tags)) return;
-    if (auto attr = getAttribute(label, "val")) str = attr.as_string();
+    if (auto attr = getAttribute(label, "val")) str = attr;
     else {
         std::vector<std::string> path;
         for(auto& s : m_entity.getPath()) path.push_back(s);
@@ -50,7 +50,7 @@ public:
 
   virtual void visit_property(StringID label, StringID &sid, std::initializer_list<Tag> tags) override {
     if (!isPersistent(tags)) return;
-    if (auto attr = getAttribute(label, "val")) sid = StringID::from(attr.as_string());
+    if (auto attr = getAttribute(label, "val")) sid = StringID::from(attr);
     else {
         std::vector<std::string> path;
         for(auto& s : m_entity.getPath()) path.push_back(s);
@@ -65,7 +65,9 @@ public:
 
   virtual void visit_property(StringID label, float &val, std::initializer_list<Tag> tags) override {
     if (!isPersistent(tags)) return;
-    if (auto attr = getAttribute(label, "val")) val = attr.as_float();
+    if (auto tag = nodeStack.top()->FirstChildElement(label.toString().c_str())) {
+        tag->QueryFloatAttribute("val", &val);
+    }
     else {
         std::vector<std::string> path;
         for(auto& s : m_entity.getPath()) path.push_back(s);
@@ -80,7 +82,9 @@ public:
 
   virtual void visit_property(StringID label, int &val, std::initializer_list<Tag> tags = {}) override {
     if (!isPersistent(tags)) return;
-    if (auto attr = getAttribute(label, "val")) val = attr.as_int();
+    if (auto tag = nodeStack.top()->FirstChildElement(label.toString().c_str())) {
+        tag->QueryIntAttribute("val", &val);
+    }
     else {
         std::vector<std::string> path;
         for(auto& s : m_entity.getPath()) path.push_back(s);
@@ -95,7 +99,10 @@ public:
 
   virtual void visit_property(StringID label, EntityReference &ref, std::initializer_list<Tag> tags = {}) override {
     if (!isPersistent(tags)) return;
-    if (auto attr = getAttribute(label, "UUID")) ref.uuid.value = attr.as_ullong();
+    if (auto tag = nodeStack.top()->FirstChildElement(label.toString().c_str())) {
+        uint64_t val = 0;
+        if(tag->QueryUnsigned64Attribute("UUID", &val) == tinyxml2::XML_SUCCESS) ref.uuid.value = val;
+    }
     else {
         std::vector<std::string> path;
         for(auto& s : m_entity.getPath()) path.push_back(s);
@@ -111,7 +118,7 @@ public:
   virtual void visit_property(StringID label, VectorAccessorBase &va, std::initializer_list<Tag> tags) override {
     if (!isPersistent(tags)) return;
 
-    auto listXmlNode = nodeStack.top().child(label.toString().c_str());
+    auto listXmlNode = nodeStack.top()->FirstChildElement(label.toString().c_str());
     if(!listXmlNode) {
         std::vector<std::string> path;
         for(auto& s : m_entity.getPath()) path.push_back(s);
@@ -124,8 +131,8 @@ public:
         return;
     }
 
-    auto attr = listXmlNode.attribute(listSizeTagString);
-    if (!attr) {
+    int listSize = 0;
+    if (listXmlNode->QueryIntAttribute(listSizeTagString, &listSize) != tinyxml2::XML_SUCCESS) {
         std::vector<std::string> path;
         for(auto& s : m_entity.getPath()) path.push_back(s);
         m_report.addError(
@@ -136,7 +143,6 @@ public:
             m_entity);
         return;
     }
-    int listSize = attr.as_int();
     if(listSize < 0){
         std::vector<std::string> path;
         for(auto& s : m_entity.getPath()) path.push_back(s);
@@ -160,7 +166,7 @@ public:
   }
 
 private:
-  std::stack<pugi::xml_node> nodeStack;
+  std::stack<tinyxml2::XMLElement*> nodeStack;
 
   DeserializationValidationReport &m_report;
   Entity m_entity;
@@ -168,24 +174,25 @@ private:
 };
 
 
-inline void loadEntity(Project& project, pugi::xml_node entityXmlNode, DeserializationValidationReport& report, Entity *parentEntity) {
+inline void loadEntity(Project& project, tinyxml2::XMLElement* entityXmlNode, DeserializationValidationReport& report, Entity *parentEntity) {
     std::string name = "";
     std::string displayName = "";
     UUID uuid(0);
 
     bool b_nameLoaded = false;
-    if (auto attr = entityXmlNode.attribute("Name")){
-      name = attr.as_string();
+    if (auto attr = entityXmlNode->Attribute("Name")){
+      name = attr;
       b_nameLoaded = true;
     }
     bool b_displayNameLoaded = false;
-    if (auto attr = entityXmlNode.attribute("DisplayName")){
-      displayName = attr.as_string();
+    if (auto attr = entityXmlNode->Attribute("DisplayName")){
+      displayName = attr;
       b_displayNameLoaded = true;
     }
     bool b_uuidLoaded = false;
-    if (auto attr = entityXmlNode.attribute("UUID")){
-      uuid.value = attr.as_ullong();
+    uint64_t val = 0;
+    if (entityXmlNode->QueryUnsigned64Attribute("UUID", &val) == tinyxml2::XML_SUCCESS){
+      uuid.value = val;
       b_uuidLoaded = true;
     }
     std::string sanitizedName = Project::sanitizeName(name);
@@ -241,10 +248,10 @@ inline void loadEntity(Project& project, pugi::xml_node entityXmlNode, Deseriali
       "Entity DisplayName is empty",
       loadedEntity);
 
-    for (auto childXmlNode : entityXmlNode.children()) {
-      std::string xmlTagName = childXmlNode.name();
+    for (auto childXmlNode = entityXmlNode->FirstChildElement(); childXmlNode; childXmlNode = childXmlNode->NextSiblingElement()) {
+      std::string xmlTagName = childXmlNode->Name();
       if (xmlTagName == childrenTagString) {
-          for(auto childEntityXml : childXmlNode.children(entityTagString)){
+          for(auto childEntityXml = childXmlNode->FirstChildElement(entityTagString); childEntityXml; childEntityXml = childEntityXml->NextSiblingElement(entityTagString)){
             loadEntity(project, childEntityXml, report, &loadedEntity);
           }
       } else {
@@ -263,18 +270,18 @@ inline void loadEntity(Project& project, pugi::xml_node entityXmlNode, Deseriali
 
 
 inline bool loadProject(Project &project, std::string_view filepath, DeserializationValidationReport &report) {
-  pugi::xml_document doc;
-  if (!doc.load_file(filepath.data())) return false;
+  tinyxml2::XMLDocument doc;
+  if (doc.LoadFile(filepath.data()) != tinyxml2::XML_SUCCESS) return false;
 
-  auto projectXml = doc.child(projectTagString);
+  auto projectXml = doc.FirstChildElement(projectTagString);
   if(!projectXml) report.addError(
     Severity::Critical,
     {"Project"},
     "",
     "<Project> root xml tag is missing.");
 
-  if(auto nameAttribute = projectXml.attribute("Name")){
-    project.m_name = nameAttribute.as_string();
+  if(auto nameAttribute = projectXml->Attribute("Name")){
+    project.m_name = nameAttribute;
     if(project.m_name.empty()) report.addError(
       Severity::Warning,
       {"Project"},
@@ -293,7 +300,7 @@ inline bool loadProject(Project &project, std::string_view filepath, Deserializa
     "IDGeneratorState",
     "Error Loading UUID Generator properties");
 
-  for(auto childEntityXml : projectXml.children(entityTagString)){
+  for(auto childEntityXml = projectXml->FirstChildElement(entityTagString); childEntityXml; childEntityXml = childEntityXml->NextSiblingElement(entityTagString)){
     loadEntity(project, childEntityXml, report, nullptr);
   }
 

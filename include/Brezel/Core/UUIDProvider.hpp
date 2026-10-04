@@ -1,5 +1,5 @@
 #pragma once
-#include <pugixml.hpp>
+#include <tinyxml2.h>
 #include <unordered_set>
 #include "Brezel/Core/UUID.hpp"
 
@@ -11,8 +11,8 @@ public:
     
     virtual UUID generate() = 0;
     
-    virtual void saveState(pugi::xml_node& root) const = 0;
-    virtual bool loadState(pugi::xml_node& root) = 0;
+    virtual void saveState(tinyxml2::XMLDocument* doc, tinyxml2::XMLElement* root) const = 0;
+    virtual bool loadState(tinyxml2::XMLElement* root) = 0;
     
     virtual bool isUsed(UUID id) const = 0;
     virtual void markAsUsed(UUID id) = 0;
@@ -27,16 +27,18 @@ public:
         return newId;
     }
 
-    void saveState(pugi::xml_node& root) const override {
-        auto node = root.append_child("IDGeneratorState");
-        node.append_attribute("Type") = "Sequential";
-        node.append_attribute("NextID") = m_nextId;
+    void saveState(tinyxml2::XMLDocument* doc, tinyxml2::XMLElement* root) const override {
+        auto node = doc->NewElement("IDGeneratorState");
+        root->InsertEndChild(node);
+        node->SetAttribute("Type", "Sequential");
+        node->SetAttribute("NextID", (uint64_t)m_nextId);
     }
 
-    bool loadState(pugi::xml_node& root) override {
-        if(auto node = root.child("IDGeneratorState")){
-            if(auto attr = node.attribute("NextID")){
-                m_nextId = attr.as_ullong();
+    bool loadState(tinyxml2::XMLElement* root) override {
+        if(auto node = root->FirstChildElement("IDGeneratorState")){
+            uint64_t val = 0;
+            if(node->QueryUnsigned64Attribute("NextID", &val) == tinyxml2::XML_SUCCESS){
+                m_nextId = val;
                 return true;
             }
         }
