@@ -1,79 +1,198 @@
-# Brezel Framework Guide
+# Brezel Framework: Comprehensive Guide
 
-Brezel is a C++23 Real-Time (RT) capable application framework built on top of EnTT ECS. It provides a robust architecture for separating Non-Real-Time (NRT) systems (like UIs, networks, and serialization) from hard Real-Time execution loops.
+Brezel is a C++23 Real-Time (RT) capable application framework built completely on top of the **EnTT** Entity Component System. It provides a robust, heavily decoupled architecture designed specifically to separate Non-Real-Time (NRT) systems (like UIs, networking, serialization, and scripting) from hard Real-Time execution loops (like 1kHz motion planning and EtherCAT fieldbus control).
+
+---
 
 ## 1. Core Philosophy: The Air-Gap
 
-The most critical architectural constraint in Brezel is the strict separation between NRT and RT layers.
+The most critical architectural constraint in Brezel (and its host ecosystem, Stacato) is the strict separation between NRT and RT layers.
 
-- **Non-Real-Time (NRT)**: UI, Serialization, File I/O, Network. This layer interacts heavily with `entt::registry`, creates/destroys entities, and manages the Command Stack (Undo/Redo).
-- **Real-Time (RT)**: High-frequency control loops (e.g., 1kHz motion planning). The RT loop **MUST NEVER** interact with `entt::registry`, trigger heap allocations, or block on mutexes.
+- **Non-Real-Time (NRT)**: UI (ImGui), Serialization, File I/O, Network, User Input. This layer interacts heavily with `entt::registry`, creates/destroys entities, pushes commands to the Undo/Redo stack, and dynamically accesses memory.
+- **Real-Time (RT)**: High-frequency control loops. The RT loop **MUST NEVER** interact with `entt::registry`, allocate heap memory (no `new`, no `std::vector::push_back`), throw exceptions, or block on standard mutexes.
 
-To achieve this, all data crossing the boundary must be strictly **Plain Old Data (POD)**.
+To achieve this, all domain data crossing the boundary must be strictly **Plain Old Data (POD)**.
 
-## 2. Component Definition (Pure PODs)
+---
 
-Components in Brezel must **NOT** inherit from any base classes and must **NOT** contain heavy heap-allocating wrappers. They are pure C++ structs.
+## 2. Core ECS & Scene Graph
+
+While EnTT provides a flat database of entities, Brezel layers a traditional Scene Graph and identity system on top using built-in components.
+
+### 2.1 Identity & UUIDs
+Every entity in Brezel must have an `IdentityComponent`.
+```cpp
+struct IdentityComponent {
+    std::string name;
+    std::string displayName;
+    UUID uuid;
+};
+```
+- `name`: A sanitized string (no spaces or slashes) used for CLI path resolution (e.g., `motor_1`).
+- `uuid`: A 64-bit globally unique identifier used for persistent cross-referencing across save files and network sessions.
+
+### 2.2 Hierarchy (Parent/Child)
+Parent-child relationships are handled by the `HierarchyComponent`.
+```cpp
+struct HierarchyComponent {
+    entt::entity parent = entt::null;
+    std::vector<entt::entity> children;
+};
+```
+*Note: Do not manipulate these components directly. Use `Entity::setParent(other)` to safely link entities.*
+
+### 2.3 Safe Cross-Referencing (`EntityReference`)
+Never store raw pointers or raw `entt::entity` handles in your components if they need to be serialized or passed between NRT systems. Use `EntityReference`.
+```cpp
+struct EntityReference {
+    UUID uuid;
+    Entity entity; 
+};
+```
+An `EntityReference` stores the UUID persistently. When a project is loaded from XML, Brezel runs a post-load "fixup" pass that scans all `EntityReference`s, looks up their UUIDs in a map, and populates the live `Entity` handle.
+
+---
+
+## 3. Component Architecture (Pure PODs)
+
+Components in Brezel must **NOT** inherit from any base classes and must **NOT** contain heavy heap-allocating wrappers or virtual tables. They are pure C++ structs.
 
 ```cpp
-struct Motor {
-    float speed{0.0f};
-    float torque{10.0f};
-    std::vector<float> test;
+struct MotorConfig {
+    float maxVelocity{100.0f};
+    float maxAcceleration{50.0f};
+    std::vector<float> lookupTable;
+    EntityReference targetAxis;
 };
 ```
 
-### Static Reflection
-Instead of intrusive virtual methods, Brezel uses static free-functions for reflection. This allows the UI and Serializer to discover properties without polluting the POD structs, keeping them lightweight and RT-safe.
+---
+
+## 4. The Reflection System
+
+Instead of intrusive virtual methods, Brezel uses static free-functions for reflection. This allows the GUI, CLI, and Serializer to dynamically discover properties without polluting the POD structs, keeping them lightweight and RT-safe.
+
+### 4.1 The `reflect` Free-Function
+For every component you create, you must provide a generic `reflect` function in the same namespace:
 
 ```cpp
 template<typename V>
-void reflect(Motor& m, V& v) {
-    v.visit_property("speed", m.speed, {Tag::Persistent, Tag::CommandStack});
-    v.visit_property("torque", m.torque, {Tag::Persistent, Tag::CommandStack});
+void reflect(MotorConfig& m, V& v) {
+    // Basic types
+    v.visit_property("maxVelocity", m.maxVelocity, {Tag::Persistent, Tag::CommandStack});
+    v.visit_property("maxAcceleration", m.maxAcceleration, {Tag::Persistent, Tag::CommandStack});
+    
+    // Entity References
+    v.visit_property("targetAxis", m.targetAxis, {Tag::Persistent});
     
     // Vectors require a VectorAccessor
-    VectorAccessor va(m.test);
-    v.visit_property("test", va, {Tag::Persistent});
+    VectorAccessor va(m.lookupTable);
+    v.visit_property("lookupTable", va, {Tag::Persistent});
 }
 ```
 
-Components must be registered in your application startup:
+### 4.2 Property Tags (`Tag::`)
+Tags define how systems interact with a property:
+- `Tag::Persistent`: The property will be written to and loaded from XML save files.
+- `Tag::CommandStack`: Modifying this property via the UI or CLI automatically pushes an Undo/Redo command.
+- `Tag::ReadOnly`: The UI should lock the field; it cannot be modified by the user.
+- `Tag::Hidden`: The UI should not render this property at all.
+
+### 4.3 Component Registration
+Before a component can be used in the Editor or loaded from XML, it must be registered in the application startup phase. The string name provided becomes the XML element tag.
 ```cpp
-ComponentRegistry::registerComponent<Motor>("Motor");
+ComponentRegistry::registerComponent<MotorConfig>("MotorConfig");
 ```
 
-## 3. State Mutation & The Command Stack
+---
 
-Because NRT and RT layers are separated, you must be careful how you mutate data in the NRT layer to ensure the rest of the application (like the GUI or network) reacts correctly.
+## 5. State Mutation & The Command Stack
 
-### Modifying Values (Undo/Redo)
+Because NRT and RT layers are separated, you must be careful how you mutate data in the NRT layer to ensure the rest of the application (like the GUI or network listeners) reacts correctly.
+
+### 5.1 Modifying Values (Undo/Redo)
 When the UI modifies a component, use `ValueChangeCommand<T>` to push the change onto the Undo/Redo stack. This command operates non-intrusively on raw memory addresses.
 
 ```cpp
 auto cmd = std::make_unique<ValueChangeCommand<float>>(
-    &motor.speed,       // Pointer to raw memory
-    motor.speed,        // Old value
-    45.5f,              // New value
-    "Set Motor Speed"   // Description
+    &config.maxVelocity,   // Pointer to raw memory
+    config.maxVelocity,    // Old value
+    150.0f,                // New value
+    "Set Max Velocity"     // Description
 );
 project.getStack().pushAndExecute(std::move(cmd));
 ```
 
-### EnTT Change Callbacks
-EnTT native signals replace classic observer patterns (like `onChange`). When a component is modified, you must notify EnTT using `patch` so it can emit `on_update` signals to any NRT listeners.
+### 5.2 EnTT Change Callbacks
+EnTT native signals replace classic observer patterns (like `onChange`). When a component is modified, you must notify EnTT using `patch` so it can emit `on_update` signals to any NRT listeners (like network replicators or UI refresh triggers).
 
 ```cpp
 // 1. Listen for updates (e.g. GUI refresh or Network Replication)
 void onMotorUpdated(entt::registry& reg, entt::entity entity) {
-    const auto& m = reg.get<Motor>(entity);
-    // ... update GUI ...
+    const auto& m = reg.get<MotorConfig>(entity);
+    spdlog::info("Motor config changed! New velocity: {}", m.maxVelocity);
 }
-registry.on_update<Motor>().connect<&onMotorUpdated>();
+registry.on_update<MotorConfig>().connect<&onMotorUpdated>();
 
 // 2. Notify EnTT after modification (e.g. after a ValueChangeCommand executes)
-registry.patch<Motor>(entity);
+registry.patch<MotorConfig>(entity);
 ```
 
-## 4. Multi-threading & Synchronization
-The UI/NRT threads write via EnTT registry/commands. The RT thread reads/writes raw pointers securely passed to it (e.g., via a synchronization phase, lock-free queues, or double-buffering), **entirely bypassing EnTT** during the RT cycle.
+---
+
+## 6. Serialization
+
+Brezel currently uses `pugixml` for serialization. 
+*(Note: A migration to `tinyxml2` is planned to ensure full compatibility with the existing Stacato backend.)*
+
+### 6.1 Saving & Loading
+The entire `Project` (which wraps the EnTT registry) can be saved and loaded with single function calls:
+```cpp
+Application::saveProject(&project, "stage_setup.xml");
+Project* p = Application::loadProject("stage_setup.xml");
+```
+
+### 6.2 XML Structure
+Because of the reflection system, the XML output is clean, semantic, and highly readable:
+```xml
+<Project Name="MainStage">
+  <Entity Name="Winch1" DisplayName="Stage Left Winch" UUID="78453489">
+    <MotorConfig>
+      <maxVelocity val="100.0" />
+      <maxAcceleration val="50.0" />
+      <targetAxis UUID="12345678" /> <!-- Resolved post-load -->
+    </MotorConfig>
+  </Entity>
+</Project>
+```
+
+---
+
+## 7. Command Line Interface (CLI)
+
+Brezel includes a robust `InteractiveConsole` that provides terminal access directly into the ECS property graph. This is invaluable for debugging headless servers or automating tests.
+
+The CLI utilizes the reflection system via `SearchVisitor` to locate properties dynamically by string paths.
+
+### 7.1 Path Resolution
+Entities and properties can be addressed using dot/slash notation. 
+Format: `EntityName.ComponentName.PropertyName`
+Example: `Winch1.MotorConfig.maxVelocity`
+
+### 7.2 Core Commands
+- `ls`: List all top-level entities or children of an entity.
+- `tree`: Print the entire hierarchy and component state recursively.
+- `get <path>`: Read a property value. 
+  - `get Winch1.MotorConfig.maxVelocity` -> `100.0`
+- `set <path> <value>`: Write a property value (automatically pushes to the CommandStack for Undo/Redo).
+  - `set Winch1.MotorConfig.maxVelocity 150.0`
+- `undo` / `redo`: Step backwards or forwards through the command stack.
+- `save <file>` / `load <file>`: Triggers project serialization.
+
+---
+
+## 8. Multi-threading & Synchronization
+
+1. **The Writer (NRT)**: The UI and network threads execute commands on the `CommandStack`, mutate components, and trigger `registry.patch<T>()`.
+2. **The Reader (RT)**: The RT thread reads the pure POD components via raw pointers securely passed to it (e.g., during an atomic synchronization phase, or via double-buffered lock-free queues), **entirely bypassing EnTT** during the RT cycle. 
+3. **The Contract**: The NRT thread promises never to invalidate memory (e.g., destroying an entity or resizing a vector) while the RT thread is executing its 1ms cycle. Memory lifecycle changes are deferred until a safe synchronization point.
