@@ -6,7 +6,7 @@
 
 namespace Brezel {
 
-class ParameterBase;
+
 struct UUID;
 struct EntityReference;
 class Entity;
@@ -48,7 +48,6 @@ public:
     virtual void visit_property(StringID, bool&,                 std::initializer_list<Tag> tags = {}) {}
     virtual void visit_property(StringID, std::string&,          std::initializer_list<Tag> tags = {}) {}
     virtual void visit_property(StringID, StringID&,             std::initializer_list<Tag> tags = {}) {}
-    virtual void visit_property(StringID, ParameterBase&,        std::initializer_list<Tag> tags = {}) {}
     virtual void visit_property(StringID, EntityReference&,      std::initializer_list<Tag> tags = {}) {}
     virtual void visit_property(StringID, VectorAccessorBase&,   std::initializer_list<Tag> tags = {}) {}
     /// @}

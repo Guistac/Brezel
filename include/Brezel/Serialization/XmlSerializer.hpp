@@ -3,7 +3,6 @@
 #include <pugixml.hpp>
 #include "Brezel/Serialization/XmlCommon.hpp"
 #include "Brezel/Reflection/Visitor.hpp"
-#include "Brezel/Reflection/Parameter.hpp"
 #include "Brezel/Core/Project.hpp"
 #include "Brezel/Core/EntityReference.hpp"
 
@@ -31,12 +30,7 @@ public:
     virtual bool beginList(StringID name, size_t listSize) override { push(name); return true;  }
     virtual void endList() override { pop(); }
 
-    virtual void visit_property(StringID label, ParameterBase& p, std::initializer_list<Tag> tags) override {
-        if (!isPersistent(tags)) return;
-        push(label);
-        top().append_attribute("val") = p.toString().c_str();
-        pop();
-    }
+
     
     virtual void visit_property(StringID label, std::string& str, std::initializer_list<Tag> tags) override{
         if (!isPersistent(tags)) return;

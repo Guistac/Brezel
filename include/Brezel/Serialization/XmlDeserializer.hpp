@@ -6,7 +6,6 @@
 #include "Brezel/Core/EntityReference.hpp"
 #include "Brezel/Core/Project.hpp"
 #include "Brezel/Reflection/Visitor.hpp"
-#include "Brezel/Reflection/Parameter.hpp"
 #include "Brezel/Serialization/EntityReferenceLinker.hpp"
 
 namespace Brezel {
@@ -33,22 +32,7 @@ public:
     return true;
   }
 
-  virtual void visit_property(StringID label, ParameterBase &p, std::initializer_list<Tag> tags) override {
-    if (!isPersistent(tags))
-      return;
-    if (auto attr = getAttribute(label, "val")) {
-      p.fromString(attr.as_string());
-    } else {
-        std::vector<std::string> path;
-        for(auto& s : m_entity.getPath()) path.push_back(s);
-        m_report.addError(
-            Severity::Warning,
-            path,
-            m_currentComponentType.toString(),
-            "Error resolving Parameter \"" + label.toString() + "\"",
-            m_entity);
-    }
-  }
+
   virtual void visit_property(StringID label, std::string &str, std::initializer_list<Tag> tags) override {
     if (!isPersistent(tags)) return;
     if (auto attr = getAttribute(label, "val")) str = attr.as_string();
@@ -274,8 +258,7 @@ inline void loadEntity(Project& project, pugi::xml_node entityXmlNode, Deseriali
             loadedEntity);
       }
     }
-    CommandStackVisitor visitor(&project.getStack());
-    ComponentRegistry::reflectEntityComponents(loadedEntity, visitor);
+
 }
 
 

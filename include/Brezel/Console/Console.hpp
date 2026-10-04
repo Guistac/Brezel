@@ -35,10 +35,7 @@ public:
                               std::initializer_list<Tag> tags = {}) override {
     properties.push_back(label.toString());
   }
-  virtual void visit_property(StringID label, ParameterBase &p,
-                              std::initializer_list<Tag> tags = {}) override {
-    properties.push_back(label.toString());
-  }
+
   virtual void visit_property(StringID label, EntityReference &ref,
                               std::initializer_list<Tag> tags = {}) override {
     properties.push_back(label.toString());
@@ -324,9 +321,7 @@ private:
     case SearchVisitor::FoundType::String:
       out += *static_cast<std::string *>(result.ptr);
       break;
-    case SearchVisitor::FoundType::ParameterBase:
-      out += static_cast<ParameterBase *>(result.ptr)->toString();
-      break;
+
     case SearchVisitor::FoundType::Action:
       out = "[ERROR] Cannot 'get' an action. Use 'call'.";
       break;
@@ -363,11 +358,7 @@ private:
         onOutput.emit("[OK] Set " + path + " = " + valueStr);
         break;
       }
-      case SearchVisitor::FoundType::ParameterBase: {
-        static_cast<ParameterBase *>(result.ptr)->fromString(valueStr);
-        onOutput.emit("[OK] Set " + path + " = " + valueStr);
-        break;
-      }
+
       case SearchVisitor::FoundType::Action: {
         onOutput.emit("[ERROR] Cannot 'set' an action.");
         break;

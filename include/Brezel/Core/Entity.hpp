@@ -6,8 +6,6 @@
 #include <functional>
 #include <algorithm>
 
-#include "Brezel/Core/BaseComponent.hpp"
-#include "Brezel/Command/CommandStackVisitor.hpp"
 #include "Brezel/Core/UUID.hpp"
 
 namespace Brezel {
@@ -35,13 +33,8 @@ public:
         T& component = m_handle.emplace<T>(std::forward<Args>(args)...);
         auto* stack = m_handle.registry()->ctx().get<CommandStack*>();
 
-        // Framework logic: initialize undo stack and trigger initial reflection
-        if constexpr (std::is_base_of_v<BaseComponent, T>) {
-            component.undoStack = stack;
-            CommandStackVisitor visitor(stack);
-            component.reflect(visitor);
-        }
-
+        // Stacato NRT components are Pure PODs. Reflection and Undo 
+        // are handled externally (e.g. via GUI), not intrusively.
         return component;
     }
 

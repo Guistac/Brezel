@@ -3,7 +3,7 @@
 #include <string_view>
 #include <functional>
 #include "Brezel/Reflection/Visitor.hpp"
-#include "Brezel/Reflection/Parameter.hpp"
+
 
 namespace Brezel {
 
@@ -11,7 +11,7 @@ class SearchVisitor : public ComponentVisitor {
 public:
     enum class FoundType {
         None,
-        Int, Float, Bool, String, Action, ParameterBase
+        Int, Float, Bool, String, Action
     };
 
     struct FoundResult {
@@ -40,9 +40,7 @@ public:
     virtual void visit_property(StringID label, StringID& val, std::initializer_list<Tag> tags = {}) override {
         if (m_searchName == label) m_result = {FoundType::None, &val};
     }
-    virtual void visit_property(StringID label, ParameterBase& p, std::initializer_list<Tag> tags = {}) override {
-        if (m_searchName == label) m_result = {FoundType::ParameterBase, &p};
-    }
+
     virtual void visit_action(StringID label, std::function<void()> fn) override {
         if (m_searchName == label) {
             m_result.type = FoundType::Action;

@@ -28,10 +28,7 @@ public:
         popLevel();
     }
 
-    virtual void visit_property(StringID label, ParameterBase& p, std::initializer_list<Tag> tags) override {
-        printIndent();
-        std::cout << label.toString() << ": " << p.toString() << "\n";
-    }
+
 
     virtual void visit_property(StringID label, std::string& str, std::initializer_list<Tag> tags) override {
         printIndent();

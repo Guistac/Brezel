@@ -1,11 +1,13 @@
 #pragma once
 
-#include "Brezel/Core/BaseComponent.hpp"
 #include "Brezel/Core/Entity.hpp"
 #include "Brezel/Reflection/Visitor.hpp"
 #include <entt/entt.hpp>
 
 namespace Brezel {
+
+template<typename T, typename V>
+void reflect(T&, V&) {}
 
 class CommandStack;
 
@@ -27,7 +29,7 @@ template <typename T> void registerComponent(const char *saveString) {
   info.saveString = sid;
   info.reflect = [](Entity entity, ComponentVisitor &visitor) {
     if (auto *component = entity.try_get<T>()) {
-      component->reflect(visitor);
+      reflect(*component, visitor);
     }
   };
   info.createComponent = [](Entity entity) { entity.add<T>(); };

@@ -1,5 +1,4 @@
 #include "Brezel/App/Application.hpp"
-#include "Brezel/Command/PropertyCommand.hpp"
 #include "Brezel/Console/Console.hpp"
 #include "Brezel/Console/InteractiveConsole.hpp"
 #include "Brezel/Core/Project.hpp"
@@ -9,35 +8,38 @@
 
 using namespace Brezel;
 
-struct Motor : BaseComponent {
-  Parameter<float> speed{"speed", 0.0f};
-  Parameter<float> torque{"torque", 10.0f};
+struct Motor {
+  float speed{0.0f};
+  float torque{10.0f};
   std::vector<float> test = {0.0, 1.0, 2.0, 3.0, 4.0};
-
-  virtual void reflect(ComponentVisitor &v) override {
-    v.visit_property("speed", speed, {Tag::Persistent, Tag::CommandStack});
-    v.visit_property("torque", torque, {Tag::Persistent, Tag::CommandStack});
-    VectorAccessor va(test);
-    v.visit_property("test", va, {Tag::Persistent});
-  }
 };
 
-struct TestComponent : BaseComponent {
-  Parameter<float> haha{"haha", 123.4};
-  Parameter<float> hehe{"hehe", 567.8};
-  Parameter<float> hihi{"hihi", 987.6};
+template<typename V>
+void reflect(Motor& m, V& v) {
+  v.visit_property("speed", m.speed, {Tag::Persistent, Tag::CommandStack});
+  v.visit_property("torque", m.torque, {Tag::Persistent, Tag::CommandStack});
+  VectorAccessor va(m.test);
+  v.visit_property("test", va, {Tag::Persistent});
+}
+
+struct TestComponent {
+  float haha{123.4f};
+  float hehe{567.8f};
+  float hihi{987.6f};
   std::string hoho = "hoho";
   std::string huhu = "huhu";
   EntityReference motorRef;
-  virtual void reflect(ComponentVisitor &v) override {
-    v.visit_property("motorRef", motorRef, {Tag::Persistent});
-    v.visit_property("haha", haha, {Tag::Persistent});
-    v.visit_property("hehe", hehe, {Tag::Persistent, Tag::CommandStack});
-    v.visit_property("hihi", hihi);
-    v.visit_property("hoho", hoho, {Tag::Persistent});
-    v.visit_property("huhu", huhu);
-  };
 };
+
+template<typename V>
+void reflect(TestComponent& tc, V& v) {
+  v.visit_property("motorRef", tc.motorRef, {Tag::Persistent});
+  v.visit_property("haha", tc.haha, {Tag::Persistent});
+  v.visit_property("hehe", tc.hehe, {Tag::Persistent, Tag::CommandStack});
+  v.visit_property("hihi", tc.hihi);
+  v.visit_property("hoho", tc.hoho, {Tag::Persistent});
+  v.visit_property("huhu", tc.huhu);
+}
 
 int main() {
 
@@ -66,18 +68,7 @@ int main() {
 
   test.motorRef.set(motorObjChild2);
 
-  motor.speed.onChange.connect([](const float &newSpeed) {
-    spdlog::info("Speed updated to {}", newSpeed);
-  });
-  motor.speed.set(45.5f);
-
-  Parameter<float> timeParam("duration", 10.0f);
-  ParameterOptions timeOptions;
-  timeOptions.unit = "s";
-  timeOptions.format = FormatType::Time;
-  timeParam.setOptions(timeOptions);
-  spdlog::info("Param '{}' unit: {}", timeParam.name(),
-               timeParam.getOptions().unit);
+  motor.speed = 45.5f;
 
   if (Application::saveProject(proj, "project_alpha.xml")) {
     spdlog::info("Successfully saved project to XML!");
