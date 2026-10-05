@@ -286,6 +286,26 @@ inline void loadEntity(Project& project, tinyxml2::XMLElement* entityXmlNode, De
 }
 
 
+inline bool loadProjectFromNode(Project &project, tinyxml2::XMLElement* parentXmlNode, DeserializationValidationReport &report) {
+  if (!parentXmlNode) return false;
+
+  if (!project.ids().loadState(parentXmlNode)) {
+    report.addError(
+      Severity::Critical,
+      {"Project"},
+      "IDGeneratorState",
+      "Error Loading UUID Generator properties");
+  }
+
+  for (auto childEntityXml = parentXmlNode->FirstChildElement(entityTagString);
+       childEntityXml;
+       childEntityXml = childEntityXml->NextSiblingElement(entityTagString)) {
+    loadEntity(project, childEntityXml, report, nullptr);
+  }
+
+  return true;
+}
+
 inline bool loadProject(Project &project, std::string_view filepath, DeserializationValidationReport &report) {
   tinyxml2::XMLDocument doc;
   if (doc.LoadFile(filepath.data()) != tinyxml2::XML_SUCCESS) return false;
@@ -311,17 +331,7 @@ inline bool loadProject(Project &project, std::string_view filepath, Deserializa
     "ProjectIdentity",
     "Error resolving ProjectName");
 
-  if(!project.ids().loadState(projectXml)) report.addError(
-    Severity::Critical,
-    {"Project"},
-    "IDGeneratorState",
-    "Error Loading UUID Generator properties");
-
-  for(auto childEntityXml = projectXml->FirstChildElement(entityTagString); childEntityXml; childEntityXml = childEntityXml->NextSiblingElement(entityTagString)){
-    loadEntity(project, childEntityXml, report, nullptr);
-  }
-
-  return true;
+  return loadProjectFromNode(project, projectXml, report);
 }
 
 } // namespace Xml

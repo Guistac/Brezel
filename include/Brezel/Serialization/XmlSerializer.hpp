@@ -124,6 +124,15 @@ inline bool saveEntity(Entity& entity, tinyxml2::XMLElement* parentXmlNode, tiny
     return true;
 }
 
+inline bool saveProjectToNode(Project& project, tinyxml2::XMLElement* parentXmlNode, tinyxml2::XMLDocument* doc) {
+    if (!parentXmlNode || !doc) return false;
+    project.ids().saveState(doc, parentXmlNode);
+    project.forEachTopLevelEntity([parentXmlNode, doc](Entity& child) {
+        saveEntity(child, parentXmlNode, doc);
+    });
+    return true;
+}
+
 inline bool saveProject(Project& project, std::string_view filepath) {
     tinyxml2::XMLDocument doc;
     
@@ -131,8 +140,7 @@ inline bool saveProject(Project& project, std::string_view filepath) {
     doc.InsertEndChild(projectXml);
     projectXml->SetAttribute("Name", project.getName().data());
 
-    project.ids().saveState(&doc, projectXml); // We need to update UUIDProvider::saveState
-    project.forEachTopLevelEntity([projectXml, &doc](Entity& child) { saveEntity(child, projectXml, &doc); });
+    saveProjectToNode(project, projectXml, &doc);
 
     return doc.SaveFile(filepath.data()) == tinyxml2::XML_SUCCESS;
 }
