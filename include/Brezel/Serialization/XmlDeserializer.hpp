@@ -97,6 +97,23 @@ public:
     }
   }
 
+  virtual void visit_property(StringID label, bool &val, std::initializer_list<Tag> tags = {}) override {
+    if (!isPersistent(tags)) return;
+    if (auto tag = nodeStack.top()->FirstChildElement(label.toString().c_str())) {
+        tag->QueryBoolAttribute("val", &val);
+    }
+    else {
+        std::vector<std::string> path;
+        for(auto& s : m_entity.getPath()) path.push_back(s);
+        m_report.addError(
+            Severity::Warning,
+            path,
+            m_currentComponentType.toString(),
+            "Error resolving bool attribute \"" + label.toString() + "\"",
+            m_entity);
+    }
+  }
+
   virtual void visit_property(StringID label, EntityReference &ref, std::initializer_list<Tag> tags = {}) override {
     if (!isPersistent(tags)) return;
     if (auto tag = nodeStack.top()->FirstChildElement(label.toString().c_str())) {

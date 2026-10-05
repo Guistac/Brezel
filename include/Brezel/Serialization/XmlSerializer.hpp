@@ -62,6 +62,13 @@ public:
         pop();
     }
 
+    virtual void visit_property(StringID label, bool& val, std::initializer_list<Tag> tags) override {
+        if (!isPersistent(tags)) return;
+        push(label);
+        top()->SetAttribute("val", val);
+        pop();
+    }
+
     virtual void visit_property(StringID label, EntityReference& ref, std::initializer_list<Tag> tags = {}) override {
         if (!isPersistent(tags)) return;
         push(label);
