@@ -74,13 +74,11 @@ else()
     # --- Link Libraries ---
     if(SOURCES)
         target_link_libraries(${PROJECT_NAME} PRIVATE 
-            entt
             spdlog
             tinyxml2
         )
     else()
         target_link_libraries(${PROJECT_NAME} INTERFACE 
-            entt
             spdlog
             tinyxml2
         )

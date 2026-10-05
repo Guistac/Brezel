@@ -10,6 +10,8 @@
 
 namespace Brezel {
 
+class CommandStack;
+
 /// @brief A high-level handle to an entity within the Brezel ECS.
 /// @details This class wraps an `entt::handle` and provides a safe, object-oriented 
 /// API for component manipulation and hierarchy navigation.
@@ -29,18 +31,13 @@ public:
     /// @param args Arguments forwarded to the component constructor.
     /// @return Reference to the newly created component.
     template<typename T, typename... Args>
-    T& add(Args&&... args) {
-        T& component = m_handle.emplace<T>(std::forward<Args>(args)...);
-        auto* stack = m_handle.registry()->ctx().get<CommandStack*>();
-
-        // Stacato NRT components are Pure PODs. Reflection and Undo 
-        // are handled externally (e.g. via GUI), not intrusively.
-        return component;
+    decltype(auto) add(Args&&... args) {
+        return m_handle.emplace_or_replace<T>(std::forward<Args>(args)...);
     }
 
     /// @brief Checks if the entity has a component of type T.
     template<typename T>
-    bool has() const { return m_handle.try_get<T>(); }
+    bool has() const { return m_handle.all_of<T>(); }
 
     /// @brief Safely retrieves a pointer to a component of type T.
     /// @return Pointer to the component, or nullptr if it doesn't exist.
