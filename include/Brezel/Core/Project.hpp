@@ -18,7 +18,7 @@ class Project {
 public:
     Project(std::string_view name) :
         m_name(name),
-        m_idProvider(std::make_unique<SequentialIDProvider>())
+        m_idProvider(std::make_unique<RandomIDProvider>())
         {
             m_registry.ctx().emplace<CommandStack*>(&m_commandStack);
         }
@@ -48,6 +48,16 @@ public:
     Entity restoreEntity(std::string_view name, std::string_view displayName, UUID existingId) {
         m_idProvider->markAsUsed(existingId);
         return instantiateEntity(name, displayName, existingId);
+    }
+
+    /// @brief Creates an entity with an explicitly specified UUID, or auto-generates if invalid (0).
+    Entity createEntityWithUUID(UUID id, std::string_view displayName) {
+        if (!id.isValid()) {
+            return createEntity(displayName);
+        }
+        m_idProvider->markAsUsed(id);
+        std::string strictName = sanitizeName(displayName);
+        return instantiateEntity(strictName, displayName, id);
     }
 
     /// @brief Permanently removes an entity from the project.

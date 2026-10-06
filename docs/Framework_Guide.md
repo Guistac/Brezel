@@ -31,6 +31,8 @@ struct IdentityComponent {
 - `name`: A sanitized string (no spaces or slashes) used for CLI path resolution (e.g., `motor_1`).
 - `uuid`: A 64-bit globally unique identifier used for persistent cross-referencing across save files and network sessions.
 
+*Convenience Accessors:* `Brezel::Entity` provides `entity.getName()` and `entity.getUUID()` to query identity metadata directly without manual `try_get<IdentityComponent>()` lookups.
+
 ### 2.2 Hierarchy (Parent/Child)
 Parent-child relationships are handled by the `HierarchyComponent`.
 ```cpp
@@ -196,3 +198,68 @@ Example: `Winch1.MotorConfig.maxVelocity`
 1. **The Writer (NRT)**: The UI and network threads execute commands on the `CommandStack`, mutate components, and trigger `registry.patch<T>()`.
 2. **The Reader (RT)**: The RT thread reads the pure POD components via raw pointers securely passed to it (e.g., during an atomic synchronization phase, or via double-buffered lock-free queues), **entirely bypassing EnTT** during the RT cycle. 
 3. **The Contract**: The NRT thread promises never to invalidate memory (e.g., destroying an entity or resizing a vector) while the RT thread is executing its 1ms cycle. Memory lifecycle changes are deferred until a safe synchronization point.
+
+---
+
+## 9. Framework Concurrency & Air-Gap Primitives
+
+Brezel provides a suite of generic, stage-agnostic concurrency primitives in `include/Brezel/Concurrency/` and `include/Brezel/Core/`:
+
+### 9.1 Lock-Free Bridges
+- **`Brezel::TripleBuffer<T>`**: Lock-free, wait-free Simpson 3-slot asynchronous buffer for high-frequency producer/consumer communication (e.g. 1 kHz RT thread <-> NRT thread) without blocking or mutexes.
+- **`Brezel::RingBuffer<T, Capacity>`**: Fixed-capacity lock-free SPSC circular FIFO for bounded streaming packets.
+
+### 9.2 Periodic Loop (`Brezel::PeriodicLoop`)
+High-precision dedicated background thread executor with drift correction and anti-windup clamping:
+```cpp
+Brezel::PeriodicLoop loop("WorkerThread");
+loop.start(50.0, [](double dt) {
+    // Executes at exactly 50 Hz with absolute deadline tracking
+});
+loop.stop();
+```
+
+### 9.3 Asynchronous Mutation Queue (`Brezel::MutationQueue<T>`)
+Double-buffered MPSC queue for thread boundary crossing (e.g., UI/Scripts -> World Supervisor):
+- Producers acquire a brief lock to push mutations into an ingestion buffer.
+- The consumer drains by swapping the buffer in O(1) time, eliminating lock contention.
+*(Differentiated from `CommandStack`: `CommandStack` manages polymorphic GUI Undo/Redo history, whereas `MutationQueue` carries discrete POD state mutations into the ECS).*
+
+### 9.4 Type-Erased Mutation Envelope (`Brezel::AnyMutation`)
+Bounded 256-byte stack envelope for open-ended mutation routing across subsystems without a centralized static variant:
+- Subsystems across the repo define their own POD mutation structs locally (e.g., `MecanumConfigMutation`, `ObstacleMutation`).
+- Enforces `sizeof(T) <= 256` and `std::is_trivially_copyable_v<T>` at compile time.
+- Payloads exceeding 256 bytes must explicitly store large data in `std::shared_ptr`.
+- When drained, `mutation.execute(dispatcher)` unpacks and dispatches the typed event to connected subsystem listeners with zero dynamic allocation.
+
+### 9.5 Event Dispatcher Quarantine Wrapper (`Brezel::Dispatcher`)
+An alias/wrapper over `entt::dispatcher` provided in `Brezel/Core/Dispatcher.hpp`. Allows host applications to utilize typed event pub/sub without directly including `<entt/entt.hpp>` in application code, preserving strict EnTT quarantine.
+
+### 9.6 Entity Stream Component (`Brezel::StreamComponent<T, Tag = void>`)
+Generic ECS component bridging an entity to a lock-free `TripleBuffer<T>` at a stable memory address (`Brezel/Concurrency/StreamComponent.hpp`):
+- Resolves the EnTT "swap-and-pop" relocation danger by holding a `std::shared_ptr<TripleBuffer<T>>` or `TripleBuffer<T>*`, ensuring external producer/consumer worker threads read and write to fixed memory addresses while EnTT manages entity lifecycles.
+- Works for any trivially copyable Plain Old Data (POD) payload in any direction (Inbound telemetry or Outbound control setpoints).
+- **Multiple Streams of the Same Payload Type**: If an entity needs to receive or send multiple streams sharing the exact same payload type `T` (e.g., Primary NIC vs Backup NIC, or Front LiDAR vs Rear LiDAR), differentiate them cleanly using the optional `Tag` template parameter:
+```cpp
+template <typename T, typename Tag = void>
+struct StreamComponent {
+    std::shared_ptr<TripleBuffer<T>> buffer;
+    TripleBuffer<T>* rawBuffer{nullptr};
+    uint64_t lastTimestampNs{0};
+    uint32_t statusWord{0};
+    bool isConnected{false};
+
+    TripleBuffer<T>* get() const;
+    bool isValid() const;
+};
+
+// Example usage:
+struct PrimaryNicTag {};
+struct BackupNicTag {};
+
+entity.addComponent<Brezel::StreamComponent<TelemetryPayload, PrimaryNicTag>>(bufA);
+entity.addComponent<Brezel::StreamComponent<TelemetryPayload, BackupNicTag>>(bufB);
+```
+
+
+

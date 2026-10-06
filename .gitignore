@@ -5,7 +5,7 @@ build/
 .aider*
 *.xml
 *.o
-Brezel
+/Brezel
 CMakeCache.txt
 CMakeFiles/
 Makefile

@@ -35,6 +35,10 @@ public:
         return m_handle.emplace_or_replace<T>(std::forward<Args>(args)...);
     }
 
+    /// @brief Removes a component of type T from the entity.
+    template<typename T>
+    void remove() { m_handle.remove<T>(); }
+
     /// @brief Checks if the entity has a component of type T.
     template<typename T>
     bool has() const { return m_handle.all_of<T>(); }
@@ -78,6 +82,9 @@ public:
 
     /// @brief Convenience method to get the entity's debug name from IdentityComponent.
     std::string_view getName();
+
+    /// @brief Convenience method to get the entity's unique UUID from IdentityComponent.
+    UUID getUUID();
 
     /// @brief Generates a breadcrumb-style path of the entity (e.g., {"Root", "Parent", "Me"}).
     std::vector<std::string> getPath();
@@ -127,6 +134,13 @@ inline std::string_view Entity::getName(){
         return identity->name;
     }
     return "";
+}
+
+inline UUID Entity::getUUID(){
+    if(auto identity = try_get<IdentityComponent>()){
+        return identity->uuid;
+    }
+    return UUID{};
 }
 
 inline std::vector<std::string> Entity::getPath(){
