@@ -120,13 +120,13 @@ public:
       };
 
       if (parentPath.empty()) {
-        auto view = m_project.getRegistry()
-                        .view<HierarchyComponent, IdentityComponent>();
+        auto readAccess = m_project.read();
+        auto view = readAccess.view<HierarchyComponent, IdentityComponent>();
         for (auto e : view) {
           if (!view.get<HierarchyComponent>(e).parent) {
             std::string_view name = view.get<IdentityComponent>(e).name;
             if (name.starts_with(childPrefix)) {
-              addEntityMatches(Entity(e, m_project.getRegistry()), "", std::string(name));
+              addEntityMatches(Entity(e, const_cast<entt::registry&>(readAccess.registry())), "", std::string(name));
             }
           }
         }

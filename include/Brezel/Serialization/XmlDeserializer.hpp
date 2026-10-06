@@ -289,14 +289,6 @@ inline void loadEntity(Project& project, tinyxml2::XMLElement* entityXmlNode, De
 inline bool loadProjectFromNode(Project &project, tinyxml2::XMLElement* parentXmlNode, DeserializationValidationReport &report) {
   if (!parentXmlNode) return false;
 
-  if (!project.ids().loadState(parentXmlNode)) {
-    report.addError(
-      Severity::Critical,
-      {"Project"},
-      "IDGeneratorState",
-      "Error Loading UUID Generator properties");
-  }
-
   for (auto childEntityXml = parentXmlNode->FirstChildElement(entityTagString);
        childEntityXml;
        childEntityXml = childEntityXml->NextSiblingElement(entityTagString)) {

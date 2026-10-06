@@ -261,5 +261,13 @@ entity.addComponent<Brezel::StreamComponent<TelemetryPayload, PrimaryNicTag>>(bu
 entity.addComponent<Brezel::StreamComponent<TelemetryPayload, BackupNicTag>>(bufB);
 ```
 
+### 9.7 Project Thread Safety & RAII Registry Accessors (`Brezel::Project`)
+Thread safety across NRT systems (UI rendering, serialization, supervisor ticks, mutation execution) is enforced at compile time via RAII scoped guards on `Brezel::Project`:
+- The raw `entt::registry` is strictly encapsulated (private). Direct registry access via `getRegistry()` is removed.
+- **`Project::read()`**: Returns a scoped `ReadAccess` guard holding a `std::shared_lock<std::shared_mutex>`. Exposes const view iterators (`view<const Components...>()`), `get<T>()`, `try_get<T>()`, and `getEntity(e)`. Multiple reader threads (e.g., UI rendering, serialization) query the ECS simultaneously with zero lock contention.
+- **`Project::write()`**: Returns a scoped `WriteAccess` guard holding a `std::unique_lock<std::shared_mutex>`. Exposes mutable views, `emplace<T>()`, `remove<T>()`, and `destroy(e)`.
+- Eliminates manual lock management and prevents data races across concurrent NRT threads while maintaining 100% EnTT quarantine.
+
+
 
 

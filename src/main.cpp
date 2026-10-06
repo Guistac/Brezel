@@ -90,11 +90,11 @@ int main() {
 
   // Demonstrate Change Callbacks (Replacing Parameter::onChange)
   // EnTT natively emits signals whenever a component is updated via patch/replace
-  proj->getRegistry().on_update<Motor>().connect<&onMotorUpdated>();
+  proj->write()->on_update<Motor>().connect<&onMotorUpdated>();
 
   // Triggering the callback requires updating the component through EnTT's patch/replace API
   // In a real Stacato editor, after the ValueChangeCommand executes, we notify EnTT:
-  proj->getRegistry().patch<Motor>(motorObj.handle().entity(), [](auto& m) {
+  proj->write()->patch<Motor>(motorObj.handle().entity(), [](auto& m) {
       m.speed = 99.9f;
   });
 

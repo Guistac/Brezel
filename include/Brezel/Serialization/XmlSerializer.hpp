@@ -126,7 +126,6 @@ inline bool saveEntity(Entity& entity, tinyxml2::XMLElement* parentXmlNode, tiny
 
 inline bool saveProjectToNode(Project& project, tinyxml2::XMLElement* parentXmlNode, tinyxml2::XMLDocument* doc) {
     if (!parentXmlNode || !doc) return false;
-    project.ids().saveState(doc, parentXmlNode);
     project.forEachTopLevelEntity([parentXmlNode, doc](Entity& child) {
         saveEntity(child, parentXmlNode, doc);
     });
