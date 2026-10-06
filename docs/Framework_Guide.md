@@ -268,6 +268,12 @@ Thread safety across NRT systems (UI rendering, serialization, supervisor ticks,
 - **`Project::write()`**: Returns a scoped `WriteAccess` guard holding a `std::unique_lock<std::shared_mutex>`. Exposes mutable views, `emplace<T>()`, `remove<T>()`, and `destroy(e)`.
 - Eliminates manual lock management and prevents data races across concurrent NRT threads while maintaining 100% EnTT quarantine.
 
+### 9.8 Cross-Platform Thread Naming (`Brezel::setThreadName`)
+Located in `Brezel/Concurrency/ThreadUtils.hpp`:
+- Cross-platform utility that labels the currently executing thread for LLDB/GDB debuggers, Xcode, VS Code, Instruments, and OS thread samplers.
+- Automatically handles platform differences (macOS `pthread_setname_np(name)` vs Linux `pthread_setname_np(pthread_self(), name)` vs Windows `SetThreadDescription`).
+- Automatically integrated into `Brezel::PeriodicLoop::start` to name periodic background workers.
+
 
 
 

@@ -6,6 +6,7 @@
 #include <atomic>
 #include <string>
 #include <string_view>
+#include "Brezel/Concurrency/ThreadUtils.hpp"
 
 namespace Brezel {
 
@@ -43,7 +44,7 @@ public:
         if (m_running.exchange(true)) return; // Already running
 
         m_thread = std::thread([this, targetFrequencyHz, callback]() {
-            // macOS/Linux thread naming could be added here if OS-specific headers were included
+            Brezel::setThreadName(m_threadName);
             
             using namespace std::chrono;
             
