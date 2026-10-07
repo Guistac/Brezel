@@ -18,6 +18,7 @@ struct ComponentTypeInfo {
   std::function<void(Entity, ComponentVisitor &)> reflect;
   std::function<void(Entity)> createComponent;
   std::function<bool(Entity)> hasComponent;
+  std::function<bool(Entity)> customDrawer{nullptr};
 };
 
 inline std::unordered_map<entt::id_type, ComponentTypeInfo> componentInfoById;
@@ -38,6 +39,17 @@ template <typename T> void registerComponent(const char *saveString) {
   componentInfoById[componentId] = info;
   componentInfoByTypeName[sid] = info;
 };
+
+template <typename T> void setCustomDrawer(std::function<bool(Entity)> drawer) {
+  entt::id_type componentId = entt::type_id<T>().hash();
+  if (componentInfoById.contains(componentId)) {
+    componentInfoById[componentId].customDrawer = drawer;
+    StringID sid = componentInfoById[componentId].saveString;
+    if (componentInfoByTypeName.contains(sid)) {
+      componentInfoByTypeName[sid].customDrawer = drawer;
+    }
+  }
+}
 
 inline void reflectEntityComponents(Entity entity, ComponentVisitor &visitor) {
   auto &entt_registry = entity.registry();

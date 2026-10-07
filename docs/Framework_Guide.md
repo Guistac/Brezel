@@ -104,6 +104,10 @@ Tags define how systems interact with a property:
 Before a component can be used in the Editor or loaded from XML, it must be registered in the application startup phase. The string name provided becomes the XML element tag.
 ```cpp
 ComponentRegistry::registerComponent<MotorConfig>("MotorConfig");
+// Optional: Register custom UI drawer callback (for specialized multi-property widgets)
+ComponentRegistry::setCustomDrawer<MotorConfig>([](Brezel::Entity entity) {
+    return drawMotorConfigCustomGui(entity);
+});
 ```
 
 ---
