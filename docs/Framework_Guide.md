@@ -100,10 +100,18 @@ Tags define how systems interact with a property:
 - `Tag::ReadOnly`: The UI should lock the field; it cannot be modified by the user.
 - `Tag::Hidden`: The UI should not render this property at all.
 
-### 4.3 Component Registration
+### 4.3 Component Registration & Flags
 Before a component can be used in the Editor or loaded from XML, it must be registered in the application startup phase. The string name provided becomes the XML element tag.
 ```cpp
 ComponentRegistry::registerComponent<MotorConfig>("MotorConfig");
+
+// Transient runtime conduits (IPC queues, triple buffers, network pipes):
+// Reflected in UI / Debug Inspector, but skipped by XML Serializer so save files stay clean
+ComponentRegistry::registerComponent<StreamComponent<OdometryFeedback>>(
+    "StreamComponent_OdometryFeedback",
+    ComponentRegistry::ComponentFlag::Transient
+);
+
 // Optional: Register custom UI drawer callback (for specialized multi-property widgets)
 ComponentRegistry::setCustomDrawer<MotorConfig>([](Brezel::Entity entity) {
     return drawMotorConfigCustomGui(entity);

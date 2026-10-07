@@ -12,6 +12,15 @@ void reflect(T&, V&) {}
 class CommandStack;
 
 namespace ComponentRegistry {
+ 
+enum class ComponentFlag : uint32_t {
+  None = 0,
+  Transient = 1 << 0, ///< Inspectable in UI and reflected at runtime, but skipped by XML Serializer
+};
+
+inline bool isTransient(ComponentFlag flags) noexcept {
+  return (static_cast<uint32_t>(flags) & static_cast<uint32_t>(ComponentFlag::Transient)) != 0;
+}
 
 struct ComponentTypeInfo {
   StringID saveString;
@@ -19,15 +28,17 @@ struct ComponentTypeInfo {
   std::function<void(Entity)> createComponent;
   std::function<bool(Entity)> hasComponent;
   std::function<bool(Entity)> customDrawer{nullptr};
+  ComponentFlag flags{ComponentFlag::None};
 };
 
 inline std::unordered_map<entt::id_type, ComponentTypeInfo> componentInfoById;
 inline std::unordered_map<StringID, ComponentTypeInfo> componentInfoByTypeName;
 
-template <typename T> void registerComponent(const char *saveString) {
+template <typename T> void registerComponent(const char *saveString, ComponentFlag flags = ComponentFlag::None) {
   StringID sid = StringID::from(saveString);
   ComponentTypeInfo info;
   info.saveString = sid;
+  info.flags = flags;
   info.reflect = [](Entity entity, ComponentVisitor &visitor) {
     if (auto *component = entity.try_get<T>()) {
       reflect(*component, visitor);

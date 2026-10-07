@@ -25,6 +25,12 @@ public:
     tinyxml2::XMLElement* top(){ return nodeStack.top(); }
 
     virtual bool beginComponent(StringID componentTypeName) override {
+        if (ComponentRegistry::componentInfoByTypeName.contains(componentTypeName)) {
+            const auto& info = ComponentRegistry::componentInfoByTypeName.at(componentTypeName);
+            if (ComponentRegistry::isTransient(info.flags)) {
+                return false;
+            }
+        }
         push(componentTypeName);
         return true;
     }
