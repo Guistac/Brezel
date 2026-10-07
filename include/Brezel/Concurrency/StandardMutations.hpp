@@ -6,6 +6,8 @@
 #include "Brezel/Core/Project.hpp"
 #include "Brezel/Concurrency/StreamComponent.hpp"
 #include "Brezel/Concurrency/TripleBuffer.hpp"
+#include "Brezel/Concurrency/QueueComponent.hpp"
+#include "Brezel/Concurrency/RingBuffer.hpp"
 #include <string_view>
 #include <cstring>
 #include <algorithm>
@@ -79,6 +81,25 @@ struct DetachStream {
     Entity entity{};
 };
 
+/**
+ * @brief Standard discrete mutation to attach a lock-free RingBuffer QueueComponent to an entity.
+ */
+template <typename T, std::size_t Capacity = 64, typename Tag = void>
+struct AttachQueue {
+    UUID uuid{0};
+    Entity entity{};
+    RingBuffer<T, Capacity>* rawQueue{nullptr};
+};
+
+/**
+ * @brief Standard discrete mutation to detach a lock-free RingBuffer QueueComponent from an entity.
+ */
+template <typename T, std::size_t Capacity = 64, typename Tag = void>
+struct DetachQueue {
+    UUID uuid{0};
+    Entity entity{};
+};
+
 static_assert(std::is_trivially_copyable_v<DestroyEntity>, "DestroyEntity must be trivially copyable POD");
 static_assert(std::is_trivially_copyable_v<ClearProject>, "ClearProject must be trivially copyable POD");
 static_assert(std::is_trivially_copyable_v<CreateEntity>, "CreateEntity must be trivially copyable POD");
@@ -137,6 +158,24 @@ inline void handleDetachStream(Project& project, const DetachStream<T, Tag>& m) 
     }
 }
 
+template <typename T, std::size_t Capacity, typename Tag>
+inline void handleAttachQueue(Project& project, const AttachQueue<T, Capacity, Tag>& m) {
+    auto ent = project.resolveEntity(m.uuid, m.entity);
+    if (ent.isValid()) {
+        QueueComponent<T, Capacity, Tag> queue{};
+        queue.rawQueue = m.rawQueue;
+        ent.template add_or_replace<QueueComponent<T, Capacity, Tag>>(queue);
+    }
+}
+
+template <typename T, std::size_t Capacity, typename Tag>
+inline void handleDetachQueue(Project& project, const DetachQueue<T, Capacity, Tag>& m) {
+    auto ent = project.resolveEntity(m.uuid, m.entity);
+    if (ent.isValid() && ent.template has<QueueComponent<T, Capacity, Tag>>()) {
+        ent.template remove<QueueComponent<T, Capacity, Tag>>();
+    }
+}
+
 } // namespace Internal
 
 /**
@@ -156,6 +195,15 @@ template <typename T, typename Tag = void>
 inline void registerStreamMutationHandlers(Project& project, Dispatcher& dispatcher) {
     dispatcher.sink<AttachStream<T, Tag>>().template connect<&Internal::handleAttachStream<T, Tag>>(project);
     dispatcher.sink<DetachStream<T, Tag>>().template connect<&Internal::handleDetachStream<T, Tag>>(project);
+}
+
+/**
+ * @brief Registers standard QueueComponent attach/detach mutation handlers for payload type T, Capacity, and optional Tag.
+ */
+template <typename T, std::size_t Capacity = 64, typename Tag = void>
+inline void registerQueueMutationHandlers(Project& project, Dispatcher& dispatcher) {
+    dispatcher.sink<AttachQueue<T, Capacity, Tag>>().template connect<&Internal::handleAttachQueue<T, Capacity, Tag>>(project);
+    dispatcher.sink<DetachQueue<T, Capacity, Tag>>().template connect<&Internal::handleDetachQueue<T, Capacity, Tag>>(project);
 }
 
 } // namespace Brezel::Mutations

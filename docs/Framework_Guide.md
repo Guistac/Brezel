@@ -265,7 +265,14 @@ entity.addComponent<Brezel::StreamComponent<TelemetryPayload, PrimaryNicTag>>(bu
 entity.addComponent<Brezel::StreamComponent<TelemetryPayload, BackupNicTag>>(bufB);
 ```
 
-### 9.7 Project Thread Safety & RAII Registry Accessors (`Brezel::Project`)
+### 9.7 Entity Queue Component (`Brezel::QueueComponent<T, Capacity = 64, Tag = void>`)
+Generic ECS component bridging an entity to a lock-free Single-Producer Single-Consumer (SPSC) `RingBuffer<T, Capacity>` at a stable memory address (`Brezel/Concurrency/QueueComponent.hpp`):
+- Provides lossless in-order FIFO queuing for discrete event commands (e.g., `MotionCommand`, E-Stops, Cue triggers) crossing the NRT $\leftrightarrow$ RT boundary.
+- Resolves EnTT "swap-and-pop" relocation by holding a `std::shared_ptr<RingBuffer<T, Capacity>>` or non-owning `RingBuffer<T, Capacity>*`.
+- Works for any trivially copyable Plain Old Data (POD) payload.
+- Can be tagged (`QueueComponent<Payload, 64, EmergencyTag>`) if an entity needs multiple distinct queues of the same payload type.
+
+### 9.8 Project Thread Safety & RAII Registry Accessors (`Brezel::Project`)
 Thread safety across NRT systems (UI rendering, serialization, supervisor ticks, mutation execution) is enforced at compile time via RAII scoped guards on `Brezel::Project`:
 - The raw `entt::registry` is strictly encapsulated (private). Direct registry access via `getRegistry()` is removed.
 - **`Project::read()`**: Returns a scoped `ReadAccess` guard holding a `std::shared_lock<std::shared_mutex>`. Exposes const view iterators (`view<const Components...>()`), `get<T>()`, `try_get<T>()`, and `getEntity(e)`. Multiple reader threads (e.g., UI rendering, serialization) query the ECS simultaneously with zero lock contention.
@@ -273,22 +280,25 @@ Thread safety across NRT systems (UI rendering, serialization, supervisor ticks,
 - **`Project::resolveEntity(uuid, fallback)`**: Resolves an entity either by its persistent `UUID` or by a local fallback `Entity` handle.
 - Eliminates manual lock management and prevents data races across concurrent NRT threads while maintaining 100% EnTT quarantine.
 
-### 9.8 Cross-Platform Thread Naming (`Brezel::setThreadName`)
+### 9.9 Cross-Platform Thread Naming (`Brezel::setThreadName`)
 Located in `Brezel/Concurrency/ThreadUtils.hpp`:
 - Cross-platform utility that labels the currently executing thread for LLDB/GDB debuggers, Xcode, VS Code, Instruments, and OS thread samplers.
 - Automatically handles platform differences (macOS `pthread_setname_np(name)` vs Linux `pthread_setname_np(pthread_self(), name)` vs Windows `SetThreadDescription`).
 - Automatically integrated into `Brezel::PeriodicLoop::start` to name periodic background workers.
 
-### 9.9 Standard Lifecycle Mutations (`Brezel/Concurrency/StandardMutations.hpp`)
-Pre-packaged, domain-agnostic discrete mutations and dispatcher sink connectors for asynchronous entity lifecycle and continuous stream management:
+### 9.10 Standard Lifecycle Mutations (`Brezel/Concurrency/StandardMutations.hpp`)
+Pre-packaged, domain-agnostic discrete mutations and dispatcher sink connectors for asynchronous entity lifecycle and continuous stream/queue management:
 - `Brezel::Mutations::DestroyEntity`: Destroys an entity permanently by UUID or handle fallback.
 - `Brezel::Mutations::ClearProject`: Clears all entities in the project.
 - `Brezel::Mutations::CreateEntity`: Creates a new entity with optional UUID and display name.
 - `Brezel::Mutations::RenameEntity`: Renames an entity asynchronously.
 - `Brezel::Mutations::AttachStream<T, Tag>`: Attaches a `StreamComponent<T, Tag>` to an entity.
 - `Brezel::Mutations::DetachStream<T, Tag>`: Detaches a `StreamComponent<T, Tag>` from an entity.
+- `Brezel::Mutations::AttachQueue<T, Capacity, Tag>`: Attaches a `QueueComponent<T, Capacity, Tag>` to an entity.
+- `Brezel::Mutations::DetachQueue<T, Capacity, Tag>`: Detaches a `QueueComponent<T, Capacity, Tag>` from an entity.
 - `Brezel::Mutations::registerStandardMutationHandlers(project, dispatcher)`: Automatically registers lifecycle handlers.
 - `Brezel::Mutations::registerStreamMutationHandlers<T, Tag>(project, dispatcher)`: Automatically registers typed stream handlers.
+- `Brezel::Mutations::registerQueueMutationHandlers<T, Capacity, Tag>(project, dispatcher)`: Automatically registers typed queue handlers.
 
 
 

@@ -1,6 +1,6 @@
 #pragma once
-
 #include "Brezel/Concurrency/TripleBuffer.hpp"
+#include "Brezel/Reflection/Visitor.hpp"
 #include <memory>
 #include <type_traits>
 
@@ -45,5 +45,14 @@ struct StreamComponent {
         return get() != nullptr;
     }
 };
+
+template <typename T, typename TagType, typename V>
+void reflect(StreamComponent<T, TagType>& stream, V& v) {
+    v.visit_property("isConnected", stream.isConnected, {Tag::ReadOnly});
+    int status = static_cast<int>(stream.statusWord);
+    v.visit_property("statusWord", status, {Tag::ReadOnly});
+    float lastTimestampSec = static_cast<float>(stream.lastTimestampNs) * 1e-9f;
+    v.visit_property("lastTimestampSec", lastTimestampSec, {Tag::ReadOnly});
+}
 
 } // namespace Brezel
