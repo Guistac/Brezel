@@ -209,6 +209,18 @@ public:
         else return Entity(m_registry);
     }
 
+    /// @brief Resolves an entity either by persistent UUID (primary) or local handle fallback.
+    Entity resolveEntity(UUID uuid, Entity fallback = {}) {
+        if (uuid.isValid()) {
+            auto ent = getEntityByUUID(uuid);
+            if (ent.isValid()) return ent;
+        }
+        if (fallback.isValid() && &fallback.registry() == &m_registry) {
+            return fallback;
+        }
+        return Entity(m_registry);
+    }
+
     /// @brief Iterates over all entities that do not have a parent.
     /// @param callback A function taking (Entity ent).
     template<typename Func, typename... Args>

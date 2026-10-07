@@ -270,6 +270,7 @@ Thread safety across NRT systems (UI rendering, serialization, supervisor ticks,
 - The raw `entt::registry` is strictly encapsulated (private). Direct registry access via `getRegistry()` is removed.
 - **`Project::read()`**: Returns a scoped `ReadAccess` guard holding a `std::shared_lock<std::shared_mutex>`. Exposes const view iterators (`view<const Components...>()`), `get<T>()`, `try_get<T>()`, and `getEntity(e)`. Multiple reader threads (e.g., UI rendering, serialization) query the ECS simultaneously with zero lock contention.
 - **`Project::write()`**: Returns a scoped `WriteAccess` guard holding a `std::unique_lock<std::shared_mutex>`. Exposes mutable views, `emplace<T>()`, `remove<T>()`, and `destroy(e)`.
+- **`Project::resolveEntity(uuid, fallback)`**: Resolves an entity either by its persistent `UUID` or by a local fallback `Entity` handle.
 - Eliminates manual lock management and prevents data races across concurrent NRT threads while maintaining 100% EnTT quarantine.
 
 ### 9.8 Cross-Platform Thread Naming (`Brezel::setThreadName`)
@@ -277,6 +278,18 @@ Located in `Brezel/Concurrency/ThreadUtils.hpp`:
 - Cross-platform utility that labels the currently executing thread for LLDB/GDB debuggers, Xcode, VS Code, Instruments, and OS thread samplers.
 - Automatically handles platform differences (macOS `pthread_setname_np(name)` vs Linux `pthread_setname_np(pthread_self(), name)` vs Windows `SetThreadDescription`).
 - Automatically integrated into `Brezel::PeriodicLoop::start` to name periodic background workers.
+
+### 9.9 Standard Lifecycle Mutations (`Brezel/Concurrency/StandardMutations.hpp`)
+Pre-packaged, domain-agnostic discrete mutations and dispatcher sink connectors for asynchronous entity lifecycle and continuous stream management:
+- `Brezel::Mutations::DestroyEntity`: Destroys an entity permanently by UUID or handle fallback.
+- `Brezel::Mutations::ClearProject`: Clears all entities in the project.
+- `Brezel::Mutations::CreateEntity`: Creates a new entity with optional UUID and display name.
+- `Brezel::Mutations::RenameEntity`: Renames an entity asynchronously.
+- `Brezel::Mutations::AttachStream<T, Tag>`: Attaches a `StreamComponent<T, Tag>` to an entity.
+- `Brezel::Mutations::DetachStream<T, Tag>`: Detaches a `StreamComponent<T, Tag>` from an entity.
+- `Brezel::Mutations::registerStandardMutationHandlers(project, dispatcher)`: Automatically registers lifecycle handlers.
+- `Brezel::Mutations::registerStreamMutationHandlers<T, Tag>(project, dispatcher)`: Automatically registers typed stream handlers.
+
 
 
 
