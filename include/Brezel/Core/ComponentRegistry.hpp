@@ -22,10 +22,22 @@ inline bool isTransient(ComponentFlag flags) noexcept {
   return (static_cast<uint32_t>(flags) & static_cast<uint32_t>(ComponentFlag::Transient)) != 0;
 }
 
+struct ComponentOptions {
+  const char *displayName{nullptr};
+  const char *category{nullptr};
+  ComponentFlag flags{ComponentFlag::None};
+  int isTag{-1}; ///< -1 = auto-detect via std::is_empty_v<T>, 0 = false, 1 = true
+};
+
 struct ComponentTypeInfo {
   StringID saveString;
+  std::string displayName;
+  std::string category;
+  bool isTag{false};
   std::function<void(Entity, ComponentVisitor &)> reflect;
   std::function<void(Entity)> createComponent;
+  std::function<void(Entity)> removeComponent;
+  std::function<void(Entity, Entity)> copyComponent;
   std::function<bool(Entity)> hasComponent;
   std::function<bool(Entity)> customDrawer{nullptr};
   ComponentFlag flags{ComponentFlag::None};
@@ -34,22 +46,58 @@ struct ComponentTypeInfo {
 inline std::unordered_map<entt::id_type, ComponentTypeInfo> componentInfoById;
 inline std::unordered_map<StringID, ComponentTypeInfo> componentInfoByTypeName;
 
-template <typename T> void registerComponent(const char *saveString, ComponentFlag flags = ComponentFlag::None) {
+template <typename T>
+void registerComponent(const char *saveString, const ComponentOptions &options) {
   StringID sid = StringID::from(saveString);
   ComponentTypeInfo info;
   info.saveString = sid;
-  info.flags = flags;
+  info.flags = options.flags;
+
+  if (options.isTag == -1) {
+    info.isTag = std::is_empty_v<T> || (sizeof(T) <= 1);
+  } else {
+    info.isTag = (options.isTag == 1);
+  }
+
+  if (options.displayName && options.displayName[0] != '\0') {
+    info.displayName = options.displayName;
+  } else {
+    info.displayName = saveString;
+  }
+
+  if (options.category && options.category[0] != '\0') {
+    info.category = options.category;
+  } else {
+    info.category = info.isTag ? "Tags" : "General";
+  }
+
   info.reflect = [](Entity entity, ComponentVisitor &visitor) {
     if (auto *component = entity.try_get<T>()) {
       reflect(*component, visitor);
     }
   };
   info.createComponent = [](Entity entity) { entity.add<T>(); };
+  info.removeComponent = [](Entity entity) { entity.remove<T>(); };
+  info.copyComponent = [](Entity src, Entity dst) {
+    if constexpr (std::is_copy_constructible_v<T> || std::is_trivially_copyable_v<T>) {
+      if (auto *component = src.try_get<T>()) {
+        dst.add<T>(*component);
+      }
+    }
+  };
   info.hasComponent = [](Entity entity) { return entity.has<T>(); };
+
   entt::id_type componentId = entt::type_id<T>().hash();
   componentInfoById[componentId] = info;
   componentInfoByTypeName[sid] = info;
-};
+}
+
+template <typename T>
+void registerComponent(const char *saveString, ComponentFlag flags = ComponentFlag::None) {
+  ComponentOptions opts;
+  opts.flags = flags;
+  registerComponent<T>(saveString, opts);
+}
 
 template <typename T> void setCustomDrawer(std::function<bool(Entity)> drawer) {
   entt::id_type componentId = entt::type_id<T>().hash();

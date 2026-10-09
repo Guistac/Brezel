@@ -103,7 +103,14 @@ Tags define how systems interact with a property:
 ### 4.3 Component Registration & Flags
 Before a component can be used in the Editor or loaded from XML, it must be registered in the application startup phase. The string name provided becomes the XML element tag.
 ```cpp
-ComponentRegistry::registerComponent<MotorConfig>("MotorConfig");
+ComponentRegistry::registerComponent<MotorConfig>("MotorConfig", {
+    .displayName = "Motor Configuration",
+    .category    = "Actuation",
+    .flags       = ComponentRegistry::ComponentFlag::None
+});
+
+// Empty tags automatically auto-detect isTag = true and category = "Tags"
+ComponentRegistry::registerComponent<DynamicVehicleTag>("DynamicVehicleTag");
 
 // Transient runtime conduits (IPC queues, triple buffers, network pipes):
 // Reflected in UI / Debug Inspector, but skipped by XML Serializer so save files stay clean
