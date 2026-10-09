@@ -54,7 +54,7 @@ void registerComponent(const char *saveString, const ComponentOptions &options) 
   info.flags = options.flags;
 
   if (options.isTag == -1) {
-    info.isTag = std::is_empty_v<T> || (sizeof(T) <= 1);
+    info.isTag = (options.category && std::string_view(options.category) == "Tags") || std::is_empty_v<T>;
   } else {
     info.isTag = (options.isTag == 1);
   }
