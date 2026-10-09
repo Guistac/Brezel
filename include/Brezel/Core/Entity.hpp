@@ -7,6 +7,7 @@
 #include <algorithm>
 
 #include "Brezel/Core/UUID.hpp"
+#include "Brezel/Reflection/Visitor.hpp"
 
 namespace Brezel {
 
@@ -78,16 +79,19 @@ public:
     void forEachChildEntity(Func&& callback, Args&&... args);
 
     /// @brief Returns the parent entity, or an invalid Entity if at the root.
-    Entity getParent();
+    Entity getParent() const;
 
     /// @brief Convenience method to get the entity's debug name from IdentityComponent.
-    std::string_view getName();
+    std::string_view getName() const;
 
     /// @brief Convenience method to get the entity's unique UUID from IdentityComponent.
-    UUID getUUID();
+    UUID getUUID() const;
 
     /// @brief Generates a breadcrumb-style path of the entity (e.g., {"Root", "Parent", "Me"}).
-    std::vector<std::string> getPath();
+    std::vector<std::string> getPath() const;
+
+    /// @brief Clones this entity and all its non-transient components into a new entity with a new UUID.
+    Entity clone(std::string_view newName = "") const;
     
     /// @}
 
@@ -122,28 +126,28 @@ inline void Entity::forEachChildEntity(Func&& callback, Args&&... args){
     }
 }
 
-inline Entity Entity::getParent(){
+inline Entity Entity::getParent() const {
     if(auto hierarchy = try_get<HierarchyComponent>()){
         return hierarchy->parent;
     }
     return Entity();
 }
 
-inline std::string_view Entity::getName(){
+inline std::string_view Entity::getName() const {
     if(auto identity = try_get<IdentityComponent>()){
         return identity->name;
     }
     return "";
 }
 
-inline UUID Entity::getUUID(){
+inline UUID Entity::getUUID() const {
     if(auto identity = try_get<IdentityComponent>()){
         return identity->uuid;
     }
     return UUID{};
 }
 
-inline std::vector<std::string> Entity::getPath(){
+inline std::vector<std::string> Entity::getPath() const {
     std::vector<std::string> path;
     std::function<void(Entity)> addParentToPath = [&](Entity entity){
         Entity parent = entity.getParent();
@@ -159,5 +163,3 @@ inline std::vector<std::string> Entity::getPath(){
 }
 
 } // namespace Brezel
-
-#include "Brezel/Core/ComponentRegistry.hpp"

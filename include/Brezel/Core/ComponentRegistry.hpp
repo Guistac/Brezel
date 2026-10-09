@@ -1,6 +1,8 @@
 #pragma once
 
 #include "Brezel/Core/Entity.hpp"
+#include "Brezel/Core/CoreComponents.hpp"
+#include "Brezel/Core/UUIDProvider.hpp"
 #include "Brezel/Reflection/Visitor.hpp"
 #include <entt/entt.hpp>
 
@@ -43,7 +45,7 @@ struct ComponentTypeInfo {
   ComponentFlag flags{ComponentFlag::None};
 };
 
-inline std::unordered_map<entt::id_type, ComponentTypeInfo> componentInfoById;
+inline std::unordered_map<::entt::id_type, ComponentTypeInfo> componentInfoById;
 inline std::unordered_map<StringID, ComponentTypeInfo> componentInfoByTypeName;
 
 template <typename T>
@@ -87,7 +89,7 @@ void registerComponent(const char *saveString, const ComponentOptions &options) 
   };
   info.hasComponent = [](Entity entity) { return entity.has<T>(); };
 
-  entt::id_type componentId = entt::type_id<T>().hash();
+  ::entt::id_type componentId = ::entt::type_id<T>().hash();
   componentInfoById[componentId] = info;
   componentInfoByTypeName[sid] = info;
 }
@@ -100,7 +102,7 @@ void registerComponent(const char *saveString, ComponentFlag flags = ComponentFl
 }
 
 template <typename T> void setCustomDrawer(std::function<bool(Entity)> drawer) {
-  entt::id_type componentId = entt::type_id<T>().hash();
+  ::entt::id_type componentId = ::entt::type_id<T>().hash();
   if (componentInfoById.contains(componentId)) {
     componentInfoById[componentId].customDrawer = drawer;
     StringID sid = componentInfoById[componentId].saveString;
@@ -154,6 +156,40 @@ inline bool reflectEntityComponent(Entity entity, StringID componentTypeName,
   return false;
 }
 
+inline Entity cloneEntity(Entity source, std::string_view newName = "") {
+  if (!source.isValid()) return Entity{};
+
+  std::string originalName = std::string(source.getName());
+  if (originalName.empty()) originalName = "Entity";
+  std::string name = newName.empty() ? (originalName + " (Copy)") : std::string(newName);
+
+  UUID newUuid = UUIDProvider::generate();
+  Entity newEntity(source.registry().create(), source.registry());
+  newEntity.add<IdentityComponent>(name, name, newUuid);
+  newEntity.add<HierarchyComponent>();
+
+  auto& registry = source.registry();
+  auto rawEntt = source.handle().entity();
+
+  for (auto [componentTypeId, storage] : registry.storage()) {
+    if (storage.contains(rawEntt) && componentInfoById.contains(componentTypeId)) {
+      const auto& info = componentInfoById.at(componentTypeId);
+      if (info.saveString == StringID::from("IdentityComponent")) continue;
+      if (info.saveString == StringID::from("HierarchyComponent")) continue;
+      if (isTransient(info.flags)) continue;
+
+      if (info.copyComponent) {
+        info.copyComponent(source, newEntity);
+      }
+    }
+  }
+  return newEntity;
+}
+
 } // namespace ComponentRegistry
+
+inline Entity Entity::clone(std::string_view newName) const {
+  return ComponentRegistry::cloneEntity(*this, newName);
+}
 
 } // namespace Brezel

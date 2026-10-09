@@ -125,6 +125,16 @@ ComponentRegistry::setCustomDrawer<MotorConfig>([](Brezel::Entity entity) {
 });
 ```
 
+### 4.4 Entity Cloning & Duplication
+Brezel provides high-level ECS cloning primitives that automatically allocate a new UUID, copy all registered non-transient components using `info.copyComponent`, and assign a new entity name:
+```cpp
+// 1. Direct Entity API
+Brezel::Entity clonedEntity = sourceEntity.clone("Cloned Robot");
+
+// 2. ComponentRegistry Helper
+Brezel::Entity clonedEntity = Brezel::ComponentRegistry::cloneEntity(sourceEntity, "Custom Name");
+```
+
 ---
 
 ## 5. State Mutation & The Command Stack
