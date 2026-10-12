@@ -120,6 +120,7 @@ ComponentRegistry::registerComponent<StreamComponent<OdometryFeedback>>(
 );
 
 // Optional: Register custom UI drawer callback (for specialized multi-property widgets)
+// Note: Registered drawers are automatically preserved if components are re-registered.
 ComponentRegistry::setCustomDrawer<MotorConfig>([](Brezel::Entity entity) {
     return drawMotorConfigCustomGui(entity);
 });

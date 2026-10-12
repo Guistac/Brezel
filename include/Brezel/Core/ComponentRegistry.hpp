@@ -51,6 +51,8 @@ inline std::unordered_map<StringID, ComponentTypeInfo> componentInfoByTypeName;
 template <typename T>
 void registerComponent(const char *saveString, const ComponentOptions &options) {
   StringID sid = StringID::from(saveString);
+  ::entt::id_type componentId = ::entt::type_id<T>().hash();
+
   ComponentTypeInfo info;
   info.saveString = sid;
   info.flags = options.flags;
@@ -73,6 +75,11 @@ void registerComponent(const char *saveString, const ComponentOptions &options) 
     info.category = info.isTag ? "Tags" : "General";
   }
 
+  // Preserve existing custom drawer if component was previously registered or drawer assigned
+  if (componentInfoById.contains(componentId) && componentInfoById[componentId].customDrawer) {
+    info.customDrawer = componentInfoById[componentId].customDrawer;
+  }
+
   info.reflect = [](Entity entity, ComponentVisitor &visitor) {
     if (auto *component = entity.try_get<T>()) {
       reflect(*component, visitor);
@@ -89,7 +96,6 @@ void registerComponent(const char *saveString, const ComponentOptions &options) 
   };
   info.hasComponent = [](Entity entity) { return entity.has<T>(); };
 
-  ::entt::id_type componentId = ::entt::type_id<T>().hash();
   componentInfoById[componentId] = info;
   componentInfoByTypeName[sid] = info;
 }
@@ -103,8 +109,8 @@ void registerComponent(const char *saveString, ComponentFlag flags = ComponentFl
 
 template <typename T> void setCustomDrawer(std::function<bool(Entity)> drawer) {
   ::entt::id_type componentId = ::entt::type_id<T>().hash();
+  componentInfoById[componentId].customDrawer = drawer;
   if (componentInfoById.contains(componentId)) {
-    componentInfoById[componentId].customDrawer = drawer;
     StringID sid = componentInfoById[componentId].saveString;
     if (componentInfoByTypeName.contains(sid)) {
       componentInfoByTypeName[sid].customDrawer = drawer;
