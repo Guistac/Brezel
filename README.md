@@ -20,3 +20,7 @@ cmake -S . -B .
 make
 ./Brezel
 ```
+
+## License
+
+Brezel is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details.
