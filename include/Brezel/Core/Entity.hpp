@@ -63,8 +63,12 @@ public:
     /// @brief Checks if the entity handle is still valid and connected to a registry.
     bool isValid() const {  return m_handle.valid(); }
 
+    /// @brief Equality comparison based on underlying EnTT handle.
+    bool operator==(const Entity& other) const noexcept { return m_handle == other.m_handle; }
+    bool operator!=(const Entity& other) const noexcept { return !(*this == other); }
+
     /// @brief Boolean conversion for easy validity checks.
-    operator bool() const { return m_handle.valid(); }
+    explicit operator bool() const noexcept { return m_handle.valid(); }
 
     /// @name Hierarchy & Navigation
     /// @{

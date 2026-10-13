@@ -31,7 +31,7 @@ struct IdentityComponent {
 - `name`: A sanitized string (no spaces or slashes) used for CLI path resolution (e.g., `motor_1`).
 - `uuid`: A 64-bit globally unique identifier used for persistent cross-referencing across save files and network sessions.
 
-*Convenience Accessors:* `Brezel::Entity` provides `entity.getName()` and `entity.getUUID()` to query identity metadata directly without manual `try_get<IdentityComponent>()` lookups.
+*Convenience Accessors & Equality:* `Brezel::Entity` provides `entity.getName()` and `entity.getUUID()` to query identity metadata directly without manual `try_get<IdentityComponent>()` lookups. It provides `operator==` and `operator!=` for exact EnTT handle equality comparison, and an `explicit operator bool()` for handle validity checks.
 
 ### 2.2 Hierarchy (Parent/Child)
 Parent-child relationships are handled by the `HierarchyComponent`.
