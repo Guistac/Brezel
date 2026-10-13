@@ -16,12 +16,39 @@ class CommandStack;
 namespace ComponentRegistry {
  
 enum class ComponentFlag : uint32_t {
-  None = 0,
+  None      = 0,
   Transient = 1 << 0, ///< Inspectable in UI and reflected at runtime, but skipped by XML Serializer
+  Networked = 1 << 1, ///< Replicated across network (participates in distributed ECS sync)
 };
+
+inline constexpr ComponentFlag operator|(ComponentFlag a, ComponentFlag b) noexcept {
+  return static_cast<ComponentFlag>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
+}
+
+inline constexpr ComponentFlag operator&(ComponentFlag a, ComponentFlag b) noexcept {
+  return static_cast<ComponentFlag>(static_cast<uint32_t>(a) & static_cast<uint32_t>(b));
+}
+
+inline constexpr ComponentFlag operator~(ComponentFlag a) noexcept {
+  return static_cast<ComponentFlag>(~static_cast<uint32_t>(a));
+}
+
+inline constexpr ComponentFlag& operator|=(ComponentFlag& a, ComponentFlag b) noexcept {
+  a = a | b;
+  return a;
+}
+
+inline constexpr ComponentFlag& operator&=(ComponentFlag& a, ComponentFlag b) noexcept {
+  a = a & b;
+  return a;
+}
 
 inline bool isTransient(ComponentFlag flags) noexcept {
   return (static_cast<uint32_t>(flags) & static_cast<uint32_t>(ComponentFlag::Transient)) != 0;
+}
+
+inline bool isNetworked(ComponentFlag flags) noexcept {
+  return (static_cast<uint32_t>(flags) & static_cast<uint32_t>(ComponentFlag::Networked)) != 0;
 }
 
 struct ComponentOptions {

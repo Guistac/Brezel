@@ -31,6 +31,13 @@ struct IdentityComponent {
 - `name`: A sanitized string (no spaces or slashes) used for CLI path resolution (e.g., `motor_1`).
 - `uuid`: A 64-bit globally unique identifier used for persistent cross-referencing across save files and network sessions.
 
+*Deterministic Derivation:* For scenarios requiring canonical, zero-negotiation UUIDs (such as optical rigid bodies or network proxy handles derived from external names or byte identifiers), `Brezel::UUID` provides:
+```cpp
+Brezel::UUID uuid1 = Brezel::UUID::deriveFromBytes(dataPtr, dataLen);
+Brezel::UUID uuid2 = Brezel::UUID::deriveFromString("Sensor_Rig_01");
+```
+Both use 64-bit FNV-1a hashing to deterministically generate non-zero, valid `Brezel::UUID` instances.
+
 *Convenience Accessors & Equality:* `Brezel::Entity` provides `entity.getName()` and `entity.getUUID()` to query identity metadata directly without manual `try_get<IdentityComponent>()` lookups. It provides `operator==` and `operator!=` for exact EnTT handle equality comparison, and an `explicit operator bool()` for handle validity checks.
 
 ### 2.2 Hierarchy (Parent/Child)
@@ -96,6 +103,7 @@ void reflect(MotorConfig& m, V& v) {
 ### 4.2 Property Tags (`Tag::`)
 Tags define how systems interact with a property:
 - `Tag::Persistent`: The property will be written to and loaded from XML save files.
+- `Tag::Networked`: The property is replicated across network sessions (participates in distributed binary delta sync).
 - `Tag::CommandStack`: Modifying this property via the UI or CLI automatically pushes an Undo/Redo command.
 - `Tag::ReadOnly`: The UI should lock the field; it cannot be modified by the user.
 - `Tag::Hidden`: The UI should not render this property at all.
@@ -118,6 +126,17 @@ ComponentRegistry::registerComponent<StreamComponent<OdometryFeedback>>(
     "StreamComponent_OdometryFeedback",
     ComponentRegistry::ComponentFlag::Transient
 );
+
+// Networked distributed components (replicated across remote machines/proxies):
+ComponentRegistry::registerComponent<TelemetryComponent>(
+    "TelemetryComponent",
+    {
+        .flags = ComponentRegistry::ComponentFlag::Networked
+    }
+);
+
+// Flags support bitwise composition:
+// ComponentRegistry::ComponentFlag::Transient | ComponentRegistry::ComponentFlag::Networked
 
 // Optional: Register custom UI drawer callback (for specialized multi-property widgets)
 // Note: Registered drawers are automatically preserved if components are re-registered.
@@ -198,6 +217,35 @@ Because of the reflection system, the XML output is clean, semantic, and highly 
 </Project>
 ```
 
+### 6.3 High-Speed Binary Serialization (`BinaryVisitor.hpp`)
+For network state replication, IPC streaming, or fast component caching, Brezel provides compact, zero-copy binary visitors:
+- `Brezel::BinarySerializer`: Serializes reflected component properties into a contiguous byte vector.
+- `Brezel::BinaryDeserializer`: Deserializes packed byte streams with strict bounds checking and component type-hash verification.
+
+```cpp
+#include "Brezel/Serialization/BinaryVisitor.hpp"
+
+// 1. Serialize component (filtering for networked properties)
+Brezel::BinarySerializer serializer(Brezel::BinaryPropertyFilter::NetworkedOnly);
+serializer.beginComponent("MotorConfig");
+Brezel::reflect(motorConfig, serializer);
+serializer.endComponent();
+
+std::span<const uint8_t> payload = serializer.getBuffer();
+
+// 2. Deserialize payload on receiver
+Brezel::BinaryDeserializer deserializer(payload, Brezel::BinaryPropertyFilter::NetworkedOnly);
+if (deserializer.beginComponent("MotorConfig")) {
+    Brezel::reflect(targetMotorConfig, deserializer);
+    deserializer.endComponent();
+}
+```
+
+Both visitors support tag filtering via `BinaryPropertyFilter`:
+- `BinaryPropertyFilter::All`: Serializes/deserializes all reflected properties.
+- `BinaryPropertyFilter::NetworkedOnly`: Only processes properties tagged with `Tag::Networked`.
+- `BinaryPropertyFilter::PersistentOnly`: Only processes properties tagged with `Tag::Persistent`.
+
 ---
 
 ## 7. Command Line Interface (CLI)
@@ -257,10 +305,11 @@ Double-buffered MPSC queue for thread boundary crossing (e.g., UI/Scripts -> Wor
 
 ### 9.4 Type-Erased Mutation Envelope (`Brezel::AnyMutation`)
 Bounded 256-byte stack envelope for open-ended mutation routing across subsystems without a centralized static variant:
-- Subsystems across the repo define their own POD mutation structs locally (e.g., `MecanumConfigMutation`, `ObstacleMutation`).
-- Enforces `sizeof(T) <= 256` and `std::is_trivially_copyable_v<T>` at compile time.
-- Payloads exceeding 256 bytes must explicitly store large data in `std::shared_ptr`.
-- When drained, `mutation.execute(dispatcher)` unpacks and dispatches the typed event to connected subsystem listeners with zero dynamic allocation.
+- Subsystems across the repo define their own discrete mutation structs locally (e.g., `MecanumConfigMutation`, `UpdateShapeVertices`).
+- Enforces `sizeof(T) <= 256` at compile time. Zero heap allocation inside the envelope itself.
+- Trivially copyable PODs execute with zero-overhead `std::memcpy` and no-op destruction.
+- Payloads exceeding 256 bytes (or dense geometric/spline data) explicitly store large data in `std::shared_ptr`; `AnyMutation` safely manages placement construction, destruction, and reference-counted copy/move semantics via type-erased function pointers.
+- When drained, `mutation.execute(dispatcher)` unpacks and dispatches the typed event to connected subsystem listeners.
 
 ### 9.5 Event Dispatcher Quarantine Wrapper (`Brezel::Dispatcher`)
 An alias/wrapper over `entt::dispatcher` provided in `Brezel/Core/Dispatcher.hpp`. Allows host applications to utilize typed event pub/sub without directly including `<entt/entt.hpp>` in application code, preserving strict EnTT quarantine.

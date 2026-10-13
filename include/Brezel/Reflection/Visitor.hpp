@@ -70,6 +70,12 @@ public:
         return false;
     }
 
+    /// @brief Helper to check if the 'Networked' tag is present.
+    bool isNetworked(std::initializer_list<Tag> tags) {
+        for (auto t : tags) if (t == Tag::Networked) return true;
+        return false;
+    }
+
     /// @brief Helper to check if the 'CommandStack' tag is present.
     bool hasCommandStack(std::initializer_list<Tag> tags){
         for (auto t : tags) if (t == Tag::CommandStack) return true;
