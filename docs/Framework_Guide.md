@@ -131,12 +131,20 @@ ComponentRegistry::registerComponent<StreamComponent<OdometryFeedback>>(
 ComponentRegistry::registerComponent<TelemetryComponent>(
     "TelemetryComponent",
     {
-        .flags = ComponentRegistry::ComponentFlag::Networked
+        .flags     = ComponentRegistry::ComponentFlag::Networked,
+        .authority = ComponentRegistry::ReplicationAuthority::ServerAuthoritative
     }
 );
 
 // Flags support bitwise composition:
 // ComponentRegistry::ComponentFlag::Transient | ComponentRegistry::ComponentFlag::Networked
+
+// Replication Authority Semantics:
+// enum class ReplicationAuthority : uint8_t {
+//     LocalOnly           = 0, // Never replicated across network (local RT buffers, vision solvers)
+//     ServerAuthoritative = 1, // Central show console owns state; replicated Server -> Client
+//     ClientAuthoritative = 2  // Remote hardware SBC owns state; replicated Client -> Server
+// };
 
 // Optional: Register custom UI drawer callback (for specialized multi-property widgets)
 // Note: Registered drawers are automatically preserved if components are re-registered.

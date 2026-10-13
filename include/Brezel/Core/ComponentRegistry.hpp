@@ -51,10 +51,17 @@ inline bool isNetworked(ComponentFlag flags) noexcept {
   return (static_cast<uint32_t>(flags) & static_cast<uint32_t>(ComponentFlag::Networked)) != 0;
 }
 
+enum class ReplicationAuthority : uint8_t {
+  LocalOnly           = 0, ///< Never replicated across network
+  ServerAuthoritative = 1, ///< Show console owns state; replicated Server -> Client
+  ClientAuthoritative = 2  ///< AGV hardware owns state; replicated Client -> Server
+};
+
 struct ComponentOptions {
   const char *displayName{nullptr};
   const char *category{nullptr};
   ComponentFlag flags{ComponentFlag::None};
+  ReplicationAuthority authority{ReplicationAuthority::LocalOnly};
   int isTag{-1}; ///< -1 = auto-detect via std::is_empty_v<T>, 0 = false, 1 = true
 };
 
@@ -70,6 +77,7 @@ struct ComponentTypeInfo {
   std::function<bool(Entity)> hasComponent;
   std::function<bool(Entity)> customDrawer{nullptr};
   ComponentFlag flags{ComponentFlag::None};
+  ReplicationAuthority authority{ReplicationAuthority::LocalOnly};
 };
 
 inline std::unordered_map<::entt::id_type, ComponentTypeInfo> componentInfoById;
@@ -83,6 +91,7 @@ void registerComponent(const char *saveString, const ComponentOptions &options) 
   ComponentTypeInfo info;
   info.saveString = sid;
   info.flags = options.flags;
+  info.authority = options.authority;
 
   if (options.isTag == -1) {
     info.isTag = (options.category && std::string_view(options.category) == "Tags") || std::is_empty_v<T>;
@@ -131,6 +140,14 @@ template <typename T>
 void registerComponent(const char *saveString, ComponentFlag flags = ComponentFlag::None) {
   ComponentOptions opts;
   opts.flags = flags;
+  registerComponent<T>(saveString, opts);
+}
+
+template <typename T>
+void registerComponent(const char *saveString, ComponentFlag flags, ReplicationAuthority authority) {
+  ComponentOptions opts;
+  opts.flags = flags;
+  opts.authority = authority;
   registerComponent<T>(saveString, opts);
 }
 
