@@ -361,6 +361,7 @@ Thread safety across NRT systems (UI rendering, serialization, supervisor ticks,
 - **`Project::read()`**: Returns a scoped `ReadAccess` guard holding a `std::shared_lock<std::shared_mutex>`. Exposes const view iterators (`view<const Components...>()`), `get<T>()`, `try_get<T>()`, and `getEntity(e)`. Multiple reader threads (e.g., UI rendering, serialization) query the ECS simultaneously with zero lock contention.
 - **`Project::write()`**: Returns a scoped `WriteAccess` guard holding a `std::unique_lock<std::shared_mutex>`. Exposes mutable views, `emplace<T>()`, `remove<T>()`, and `destroy(e)`.
 - **`Project::resolveEntity(uuid, fallback)`**: Resolves an entity either by its persistent `UUID` or by a local fallback `Entity` handle.
+- **`Project::getEntities()`**: Returns a const reference to the internal `std::unordered_map<UUID, Entity>` of all registered entities in the project for lock-free mutation handler traversal.
 - Eliminates manual lock management and prevents data races across concurrent NRT threads while maintaining 100% EnTT quarantine.
 
 ### 9.9 Cross-Platform Thread Naming (`Brezel::setThreadName`)

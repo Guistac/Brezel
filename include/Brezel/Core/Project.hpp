@@ -209,6 +209,9 @@ public:
         else return Entity(m_registry);
     }
 
+    /// @brief Returns the map of all active entities indexed by UUID.
+    const std::unordered_map<UUID, Entity>& getEntities() const noexcept { return entitiesByUUID; }
+
     /// @brief Resolves an entity either by persistent UUID (primary) or local handle fallback.
     Entity resolveEntity(UUID uuid, Entity fallback = {}) {
         if (uuid.isValid()) {
