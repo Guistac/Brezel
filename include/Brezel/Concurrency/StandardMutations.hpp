@@ -169,7 +169,11 @@ namespace Internal {
 inline void handleDestroyEntity(Project& project, const DestroyEntity& m) {
     auto ent = project.resolveEntity(m.uuid, m.entity);
     if (ent.isValid()) {
+        UUID id = m.uuid.isValid() ? m.uuid : ent.getUUID();
         project.destroyEntity(ent);
+        if (auto* disp = project.getDispatcher()) {
+            disp->trigger(Events::EntityDestroyed{ id });
+        }
     }
 }
 
@@ -179,10 +183,14 @@ inline void handleClearProject(Project& project, const ClearProject& m) {
 }
 
 inline void handleCreateEntity(Project& project, const CreateEntity& m) {
+    Entity ent;
     if (m.uuid.isValid()) {
-        project.createEntityWithUUID(m.uuid, m.name);
+        ent = project.createEntityWithUUID(m.uuid, m.name);
     } else {
-        project.createEntity(m.name);
+        ent = project.createEntity(m.name);
+    }
+    if (auto* disp = project.getDispatcher()) {
+        disp->trigger(Events::EntitySpawned{ ent.getUUID(), ent });
     }
 }
 
@@ -260,6 +268,10 @@ inline void handleUpdateComponent(Project& project, const UpdateComponent& m) {
     if (compInfo.onUpdated) {
         compInfo.onUpdated(ent);
     }
+
+    if (auto* disp = project.getDispatcher()) {
+        disp->trigger(Events::ComponentChanged{ m.uuid.isValid() ? m.uuid : ent.getUUID(), ent, m.componentName });
+    }
 }
 
 inline void handleRemoveComponent(Project& project, const RemoveComponent& m) {
@@ -296,6 +308,9 @@ inline void handleAddComponent(Project& project, const AddComponent& m) {
  * @brief Registers standard lifecycle mutation handlers on a Dispatcher.
  */
 inline void registerStandardMutationHandlers(Project& project, Dispatcher& dispatcher) {
+    project.setDispatcher(&dispatcher);
+    ComponentRegistry::s_activeProject = &project;
+    ComponentRegistry::s_activeDispatcher = &dispatcher;
     registerBrezelCoreComponents();
 
     dispatcher.sink<DestroyEntity>().connect<&Internal::handleDestroyEntity>(project);
@@ -305,6 +320,12 @@ inline void registerStandardMutationHandlers(Project& project, Dispatcher& dispa
     dispatcher.sink<UpdateComponent>().connect<&Internal::handleUpdateComponent>(project);
     dispatcher.sink<RemoveComponent>().connect<&Internal::handleRemoveComponent>(project);
     dispatcher.sink<AddComponent>().connect<&Internal::handleAddComponent>(project);
+
+    for (const auto& [id, info] : ComponentRegistry::componentInfoById) {
+        if (info.registerSetHandler) {
+            info.registerSetHandler(project, dispatcher);
+        }
+    }
 }
 
 /**

@@ -10,6 +10,7 @@
 #include "Brezel/Command/CommandStack.hpp"
 #include "Brezel/Core/Entity.hpp"
 #include "Brezel/Core/UUIDProvider.hpp"
+#include "Brezel/Core/Dispatcher.hpp"
 
 namespace Brezel {
 
@@ -292,6 +293,12 @@ public:
         return sanitized;
     }
 
+    /// @brief Associates a mutation Dispatcher with this project.
+    void setDispatcher(Dispatcher* dispatcher) noexcept { m_dispatcher = dispatcher; }
+
+    /// @brief Gets the associated mutation Dispatcher, or nullptr if none set.
+    Dispatcher* getDispatcher() const noexcept { return m_dispatcher; }
+
     std::string m_name;
 
 private:
@@ -316,6 +323,7 @@ private:
     mutable std::shared_mutex m_mutex;
     CommandStack    m_commandStack;
     std::unordered_map<UUID, Entity> entitiesByUUID;
+    Dispatcher*     m_dispatcher{nullptr};
 };
 
 } // namespace Brezel

@@ -4,6 +4,8 @@
 #include "Brezel/Core/CoreComponents.hpp"
 #include "Brezel/Core/UUIDProvider.hpp"
 #include "Brezel/Reflection/Visitor.hpp"
+#include "Brezel/Core/Dispatcher.hpp"
+#include "Brezel/Core/Project.hpp"
 #include <entt/entt.hpp>
 
 namespace Brezel {
@@ -12,6 +14,60 @@ template<typename T, typename V>
 void reflect(T&, V&) {}
 
 class CommandStack;
+
+namespace Events {
+
+/**
+ * @brief Event emitted when an entity's component is modified via SetComponent or UpdateComponent.
+ */
+struct ComponentChanged {
+    UUID uuid{0};
+    Entity entity{};
+    StringID componentName;
+};
+
+/**
+ * @brief Event emitted when an entity is spawned into the scene.
+ */
+struct EntitySpawned {
+    UUID uuid{0};
+    Entity entity{};
+};
+
+/**
+ * @brief Event emitted when an entity is permanently removed from the scene.
+ */
+struct EntityDestroyed {
+    UUID uuid{0};
+};
+
+} // namespace Events
+
+namespace Mutations {
+
+/**
+ * @brief Standard discrete mutation to update/replace an entity's component state directly via typed C++ object.
+ */
+template <typename T>
+struct SetComponent {
+    UUID uuid{0};
+    Entity entity{};
+    T component{};
+
+    SetComponent() = default;
+    SetComponent(UUID id, Entity ent, T comp)
+        : uuid(id), entity(ent), component(std::move(comp)) {}
+    SetComponent(UUID id, T comp)
+        : uuid(id), component(std::move(comp)) {}
+};
+
+namespace Internal {
+
+template <typename T>
+inline void handleSetComponent(Project& project, const SetComponent<T>& m);
+
+} // namespace Internal
+} // namespace Mutations
 
 namespace ComponentRegistry {
  
@@ -82,12 +138,41 @@ struct ComponentTypeInfo {
   std::function<void(Entity)> onUpdated{nullptr};
   std::function<void(Entity)> onCreated{nullptr};
   std::function<void(Entity)> onRemoved{nullptr};
+  std::function<void(Project&, Dispatcher&)> registerSetHandler{nullptr};
   ComponentFlag flags{ComponentFlag::None};
   ReplicationAuthority authority{ReplicationAuthority::LocalOnly};
 };
 
 inline std::unordered_map<::entt::id_type, ComponentTypeInfo> componentInfoById;
 inline std::unordered_map<StringID, ComponentTypeInfo> componentInfoByTypeName;
+inline Project* s_activeProject{nullptr};
+inline Dispatcher* s_activeDispatcher{nullptr};
+
+} // namespace ComponentRegistry
+
+namespace Mutations::Internal {
+
+template <typename T>
+inline void handleSetComponent(Project& project, const SetComponent<T>& m) {
+    auto ent = project.resolveEntity(m.uuid, m.entity);
+    if (!ent.isValid()) return;
+
+    ent.template add_or_replace<T>(m.component);
+
+    auto it = ComponentRegistry::componentInfoById.find(::entt::type_id<T>().hash());
+    if (it != ComponentRegistry::componentInfoById.end()) {
+        if (it->second.onUpdated) {
+            it->second.onUpdated(ent);
+        }
+        if (auto* disp = project.getDispatcher()) {
+            disp->trigger(Events::ComponentChanged{ m.uuid.isValid() ? m.uuid : ent.getUUID(), ent, it->second.saveString });
+        }
+    }
+}
+
+} // namespace Mutations::Internal
+
+namespace ComponentRegistry {
 
 template <typename T>
 void registerComponent(const char *saveString, const ComponentOptions &options) {
@@ -140,6 +225,14 @@ void registerComponent(const char *saveString, const ComponentOptions &options) 
     }
   };
   info.hasComponent = [](Entity entity) { return entity.has<T>(); };
+
+  info.registerSetHandler = [](Project& project, Dispatcher& dispatcher) {
+    dispatcher.sink<Mutations::SetComponent<T>>().template connect<&Mutations::Internal::handleSetComponent<T>>(project);
+  };
+
+  if (s_activeProject && s_activeDispatcher) {
+    info.registerSetHandler(*s_activeProject, *s_activeDispatcher);
+  }
 
   componentInfoById[componentId] = info;
   componentInfoByTypeName[sid] = info;

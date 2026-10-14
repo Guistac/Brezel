@@ -441,16 +441,20 @@ Pre-packaged, domain-agnostic discrete mutations and dispatcher sink connectors 
 - `Brezel::Mutations::ClearProject`: Clears all entities in the project.
 - `Brezel::Mutations::CreateEntity`: Creates a new entity with optional UUID and display name.
 - `Brezel::Mutations::RenameEntity`: Renames an entity asynchronously.
-- `Brezel::Mutations::UpdateComponent`: Generic state mutation carrying a binary serialized component payload, updating the target entity and invoking its `onUpdated` hook under `world.write()`.
+- `Brezel::Mutations::SetComponent<T>`: Pure typed state mutation carrying a C++ value object `T`, assigning it directly (`entity.add<T>(comp)`), invoking `onUpdated`, and firing `Brezel::Events::ComponentChanged` on the Dispatcher.
+- `Brezel::Mutations::UpdateComponent`: Generic state mutation carrying a binary serialized component payload, updating the target entity, invoking its `onUpdated` hook, and firing `Brezel::Events::ComponentChanged` under `world.write()`.
 - `Brezel::Mutations::RemoveComponent`: Generic mutation detaching a component by `StringID` and invoking its `onRemoved` hook under `world.write()`.
 - `Brezel::Mutations::AddComponent`: Generic mutation instantiating a registered component by `StringID` and invoking its `onCreated` hook under `world.write()`.
 - `Brezel::Mutations::AttachStream<T, Tag>`: Attaches a `StreamComponent<T, Tag>` to an entity.
 - `Brezel::Mutations::DetachStream<T, Tag>`: Detaches a `StreamComponent<T, Tag>` from an entity.
 - `Brezel::Mutations::AttachQueue<T, Capacity, Tag>`: Attaches a `QueueComponent<T, Capacity, Tag>` to an entity.
 - `Brezel::Mutations::DetachQueue<T, Capacity, Tag>`: Detaches a `QueueComponent<T, Capacity, Tag>` from an entity.
-- `Brezel::Mutations::registerStandardMutationHandlers(project, dispatcher)`: Automatically registers lifecycle and generic component handlers.
+- `Brezel::Mutations::registerStandardMutationHandlers(project, dispatcher)`: Automatically registers lifecycle, generic component handlers, and typed `SetComponent<T>` mutation handlers for all registered components (and any components registered dynamically afterwards), associating the Dispatcher with the Project.
 - `Brezel::Mutations::registerStreamMutationHandlers<T, Tag>(project, dispatcher)`: Automatically registers typed stream handlers.
 - `Brezel::Mutations::registerQueueMutationHandlers<T, Capacity, Tag>(project, dispatcher)`: Automatically registers typed queue handlers.
+- `Brezel::Events::ComponentChanged`: Event emitted when an entity's component is modified via `SetComponent` or `UpdateComponent`.
+- `Brezel::Events::EntitySpawned`: Event emitted when an entity is spawned into the scene.
+- `Brezel::Events::EntityDestroyed`: Event emitted when an entity is permanently removed from the scene.
 
 
 

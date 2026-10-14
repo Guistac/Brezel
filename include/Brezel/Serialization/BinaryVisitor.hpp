@@ -58,6 +58,7 @@ public:
     void setFilter(BinaryPropertyFilter filter) noexcept { filter_ = filter; }
 
     const std::vector<uint8_t>& getBuffer() const noexcept { return buffer_; }
+    std::vector<uint8_t> takeBuffer() noexcept { return std::move(buffer_); }
     const uint8_t* data() const noexcept { return buffer_.data(); }
     size_t size() const noexcept { return buffer_.size(); }
 

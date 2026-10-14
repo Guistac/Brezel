@@ -36,6 +36,12 @@ public:
         return m_handle.emplace_or_replace<T>(std::forward<Args>(args)...);
     }
 
+    /// @brief Adds or replaces a component of type T on the entity.
+    template<typename T, typename... Args>
+    decltype(auto) add_or_replace(Args&&... args) {
+        return m_handle.emplace_or_replace<T>(std::forward<Args>(args)...);
+    }
+
     /// @brief Removes a component of type T from the entity.
     template<typename T>
     void remove() { m_handle.remove<T>(); }
