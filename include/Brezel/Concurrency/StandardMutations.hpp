@@ -8,6 +8,9 @@
 #include "Brezel/Concurrency/TripleBuffer.hpp"
 #include "Brezel/Concurrency/QueueComponent.hpp"
 #include "Brezel/Concurrency/RingBuffer.hpp"
+#include "Brezel/Serialization/BinaryVisitor.hpp"
+#include "Brezel/Core/ComponentRegistry.hpp"
+#include <span>
 #include <string_view>
 #include <cstring>
 #include <algorithm>
@@ -100,10 +103,62 @@ struct DetachQueue {
     Entity entity{};
 };
 
+/**
+ * @brief Standard discrete mutation to update/replace an entity's component state via serialized binary payload.
+ */
+struct UpdateComponent {
+    UUID uuid{0};
+    Entity entity{};
+    StringID componentName;
+    std::vector<uint8_t> payload;
+
+    UpdateComponent() = default;
+    UpdateComponent(UUID id, Entity ent, StringID name, std::vector<uint8_t> blob)
+        : uuid(id), entity(ent), componentName(name), payload(std::move(blob)) {}
+    UpdateComponent(UUID id, StringID name, std::vector<uint8_t> blob)
+        : uuid(id), componentName(name), payload(std::move(blob)) {}
+    UpdateComponent(UUID id, Entity ent, StringID name, std::span<const uint8_t> blobSpan)
+        : uuid(id), entity(ent), componentName(name), payload(blobSpan.begin(), blobSpan.end()) {}
+    UpdateComponent(UUID id, StringID name, std::span<const uint8_t> blobSpan)
+        : uuid(id), componentName(name), payload(blobSpan.begin(), blobSpan.end()) {}
+};
+
+/**
+ * @brief Standard discrete mutation to remove a component from an entity.
+ */
+struct RemoveComponent {
+    UUID uuid{0};
+    Entity entity{};
+    StringID componentName;
+
+    RemoveComponent() = default;
+    RemoveComponent(UUID id, Entity ent, StringID name)
+        : uuid(id), entity(ent), componentName(name) {}
+    RemoveComponent(UUID id, StringID name)
+        : uuid(id), componentName(name) {}
+};
+
+/**
+ * @brief Standard discrete mutation to instantiate a registered component on an entity.
+ */
+struct AddComponent {
+    UUID uuid{0};
+    Entity entity{};
+    StringID componentName;
+
+    AddComponent() = default;
+    AddComponent(UUID id, Entity ent, StringID name)
+        : uuid(id), entity(ent), componentName(name) {}
+    AddComponent(UUID id, StringID name)
+        : uuid(id), componentName(name) {}
+};
+
 static_assert(std::is_trivially_copyable_v<DestroyEntity>, "DestroyEntity must be trivially copyable POD");
 static_assert(std::is_trivially_copyable_v<ClearProject>, "ClearProject must be trivially copyable POD");
 static_assert(std::is_trivially_copyable_v<CreateEntity>, "CreateEntity must be trivially copyable POD");
 static_assert(std::is_trivially_copyable_v<RenameEntity>, "RenameEntity must be trivially copyable POD");
+static_assert(std::is_trivially_copyable_v<RemoveComponent>, "RemoveComponent must be trivially copyable POD");
+static_assert(std::is_trivially_copyable_v<AddComponent>, "AddComponent must be trivially copyable POD");
 
 // ==============================================================================
 // Standard Mutation Handlers Implementation
@@ -176,16 +231,80 @@ inline void handleDetachQueue(Project& project, const DetachQueue<T, Capacity, T
     }
 }
 
+inline void handleUpdateComponent(Project& project, const UpdateComponent& m) {
+    auto ent = project.resolveEntity(m.uuid, m.entity);
+    if (!ent.isValid()) return;
+
+    auto it = ComponentRegistry::componentInfoByTypeName.find(m.componentName);
+    if (it == ComponentRegistry::componentInfoByTypeName.end()) return;
+    const auto& compInfo = it->second;
+
+    if (compInfo.hasComponent && !compInfo.hasComponent(ent)) {
+        if (compInfo.createComponent) {
+            compInfo.createComponent(ent);
+            if (compInfo.onCreated) compInfo.onCreated(ent);
+        }
+    }
+
+    if (!m.payload.empty() && compInfo.reflect) {
+        BinaryDeserializer deser(m.payload.data(), m.payload.size(), BinaryPropertyFilter::All);
+        if (deser.beginComponent(m.componentName)) {
+            compInfo.reflect(ent, deser);
+            deser.endComponent();
+        } else {
+            BinaryDeserializer rawDeser(m.payload.data(), m.payload.size(), BinaryPropertyFilter::All);
+            compInfo.reflect(ent, rawDeser);
+        }
+    }
+
+    if (compInfo.onUpdated) {
+        compInfo.onUpdated(ent);
+    }
+}
+
+inline void handleRemoveComponent(Project& project, const RemoveComponent& m) {
+    auto ent = project.resolveEntity(m.uuid, m.entity);
+    if (!ent.isValid()) return;
+
+    auto it = ComponentRegistry::componentInfoByTypeName.find(m.componentName);
+    if (it != ComponentRegistry::componentInfoByTypeName.end() && it->second.removeComponent) {
+        it->second.removeComponent(ent);
+        if (it->second.onRemoved) {
+            it->second.onRemoved(ent);
+        }
+    }
+}
+
+inline void handleAddComponent(Project& project, const AddComponent& m) {
+    auto ent = project.resolveEntity(m.uuid, m.entity);
+    if (!ent.isValid()) return;
+
+    auto it = ComponentRegistry::componentInfoByTypeName.find(m.componentName);
+    if (it != ComponentRegistry::componentInfoByTypeName.end() && it->second.createComponent) {
+        if (!it->second.hasComponent || !it->second.hasComponent(ent)) {
+            it->second.createComponent(ent);
+            if (it->second.onCreated) {
+                it->second.onCreated(ent);
+            }
+        }
+    }
+}
+
 } // namespace Internal
 
 /**
- * @brief Registers standard lifecycle mutation handlers (DestroyEntity, ClearProject, CreateEntity, RenameEntity) on a Dispatcher.
+ * @brief Registers standard lifecycle mutation handlers on a Dispatcher.
  */
 inline void registerStandardMutationHandlers(Project& project, Dispatcher& dispatcher) {
+    registerBrezelCoreComponents();
+
     dispatcher.sink<DestroyEntity>().connect<&Internal::handleDestroyEntity>(project);
     dispatcher.sink<ClearProject>().connect<&Internal::handleClearProject>(project);
     dispatcher.sink<CreateEntity>().connect<&Internal::handleCreateEntity>(project);
     dispatcher.sink<RenameEntity>().connect<&Internal::handleRenameEntity>(project);
+    dispatcher.sink<UpdateComponent>().connect<&Internal::handleUpdateComponent>(project);
+    dispatcher.sink<RemoveComponent>().connect<&Internal::handleRemoveComponent>(project);
+    dispatcher.sink<AddComponent>().connect<&Internal::handleAddComponent>(project);
 }
 
 /**

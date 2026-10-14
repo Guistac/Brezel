@@ -63,6 +63,9 @@ struct ComponentOptions {
   ComponentFlag flags{ComponentFlag::None};
   ReplicationAuthority authority{ReplicationAuthority::LocalOnly};
   int isTag{-1}; ///< -1 = auto-detect via std::is_empty_v<T>, 0 = false, 1 = true
+  std::function<void(Entity)> onUpdated{nullptr};
+  std::function<void(Entity)> onCreated{nullptr};
+  std::function<void(Entity)> onRemoved{nullptr};
 };
 
 struct ComponentTypeInfo {
@@ -76,6 +79,9 @@ struct ComponentTypeInfo {
   std::function<void(Entity, Entity)> copyComponent;
   std::function<bool(Entity)> hasComponent;
   std::function<bool(Entity)> customDrawer{nullptr};
+  std::function<void(Entity)> onUpdated{nullptr};
+  std::function<void(Entity)> onCreated{nullptr};
+  std::function<void(Entity)> onRemoved{nullptr};
   ComponentFlag flags{ComponentFlag::None};
   ReplicationAuthority authority{ReplicationAuthority::LocalOnly};
 };
@@ -92,6 +98,9 @@ void registerComponent(const char *saveString, const ComponentOptions &options) 
   info.saveString = sid;
   info.flags = options.flags;
   info.authority = options.authority;
+  info.onUpdated = options.onUpdated;
+  info.onCreated = options.onCreated;
+  info.onRemoved = options.onRemoved;
 
   if (options.isTag == -1) {
     info.isTag = (options.category && std::string_view(options.category) == "Tags") || std::is_empty_v<T>;
@@ -237,6 +246,19 @@ inline Entity cloneEntity(Entity source, std::string_view newName = "") {
 }
 
 } // namespace ComponentRegistry
+
+inline void registerBrezelCoreComponents() {
+  static bool s_registered = false;
+  if (s_registered) return;
+  s_registered = true;
+
+  ComponentRegistry::registerComponent<IdentityComponent>("IdentityComponent", {
+    .displayName = "Identity",
+    .category = "Core",
+    .flags = ComponentRegistry::ComponentFlag::Networked,
+    .authority = ComponentRegistry::ReplicationAuthority::ServerAuthoritative
+  });
+}
 
 inline Entity Entity::clone(std::string_view newName) const {
   return ComponentRegistry::cloneEntity(*this, newName);

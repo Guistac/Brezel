@@ -18,3 +18,15 @@ struct IdentityComponent {
 };
 
 } // namespace Brezel
+
+#include "Brezel/Reflection/Visitor.hpp"
+
+namespace Brezel {
+
+template <typename V>
+void reflect(IdentityComponent& id, V& v) {
+    v.visit_property(StringID::from("name"), id.name, {Tag::Persistent, Tag::Networked});
+    v.visit_property(StringID::from("displayName"), id.displayName, {Tag::Persistent, Tag::Networked});
+}
+
+} // namespace Brezel
