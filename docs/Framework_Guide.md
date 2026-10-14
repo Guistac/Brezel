@@ -151,6 +151,18 @@ ComponentRegistry::registerComponent<TelemetryComponent>(
 ComponentRegistry::setCustomDrawer<MotorConfig>([](Brezel::Entity entity) {
     return drawMotorConfigCustomGui(entity);
 });
+
+// Component Lifecycle & Side-Effect Callbacks:
+// Registered handlers execute automatically under world.write() during mutation processing,
+// enabling self-contained subsystem side effects (e.g., bounding box recalculation, RT air-gap sync):
+ComponentRegistry::registerComponent<ShapeComponent>("ShapeComponent", {
+    .displayName = "2D Shape",
+    .category    = "Geometry",
+    .flags       = ComponentRegistry::ComponentFlag::Networked,
+    .onUpdated   = [](Brezel::Entity e) { e.get<ShapeComponent>().recalculateBounds(); },
+    .onCreated   = [](Brezel::Entity e) { /* Initial setup on attachment */ },
+    .onRemoved   = [](Brezel::Entity e) { /* Cleanup on detachment */ }
+});
 ```
 
 ### 4.4 Entity Cloning & Duplication
@@ -162,6 +174,59 @@ Brezel::Entity clonedEntity = sourceEntity.clone("Cloned Robot");
 // 2. ComponentRegistry Helper
 Brezel::Entity clonedEntity = Brezel::ComponentRegistry::cloneEntity(sourceEntity, "Custom Name");
 ```
+
+### 4.5 Component Authoring & Automation Quick Reference
+
+#### 1. What Components MUST Provide (Mandatory Minimum)
+1. **Plain Old Data (POD) Struct**:
+   ```cpp
+   struct MotorConfig {
+       float maxRpm{3000.0f};
+       float ratedCurrentA{12.5f};
+       bool inverted{false};
+   };
+   ```
+2. **Free-Function `reflect` Specialization**:
+   ```cpp
+   namespace Brezel {
+   template<typename V>
+   void reflect(MotorConfig& cfg, V& v) {
+       v.visit_property("maxRpm", cfg.maxRpm, {Tag::Persistent, Tag::Networked});
+       v.visit_property("ratedCurrentA", cfg.ratedCurrentA, {Tag::Persistent, Tag::Networked});
+       v.visit_property("inverted", cfg.inverted, {Tag::Persistent, Tag::Networked});
+   }
+   }
+   ```
+3. **Registration Call at Startup**:
+   ```cpp
+   Brezel::ComponentRegistry::registerComponent<MotorConfig>("MotorConfig");
+   ```
+
+#### 2. What Automations Exist BY DEFAULT (Zero Boilerplate)
+- **Type-Erased CRUD Operations**: `createComponent` (`e.add<T>()`), `removeComponent` (`e.remove<T>()`), `hasComponent` (`e.has<T>()`), and `copyComponent` are auto-synthesized for every registered type.
+- **Entity Cloning**: `entity.clone()` automatically copies all registered non-transient components to the clone without custom copying code.
+- **Tag Auto-Detection**: Empty structs (`std::is_empty_v<T> == true`) or category `"Tags"` automatically set `isTag = true`, rendering as compact tag pills in UIs.
+- **Generic Visitor Reflection**: Serializers, debug inspect visitors, and GUI reflection visitors iterate properties automatically via `info.reflect(entity, visitor)`.
+- **Discrete Mutation Handling**: Standard mutations (`Brezel::Mutations::UpdateComponent`, `RemoveComponent`, `AddComponent`) resolve the entity and invoke `info.reflect`, `createComponent`, or `removeComponent` safely under `world.write()`.
+
+#### 3. What Components CAN OPTIONALLY Register
+- **`displayName`**: Human-readable label in UI/menus (e.g. `"Motor Configuration"`). Defaults to `saveString`.
+- **`category`**: Grouping category in add/inspection menus (e.g. `"Actuation"`, `"Geometry"`, `"Tags"`).
+- **`flags`**:
+  - `ComponentFlag::None` (default).
+  - `ComponentFlag::Transient`: Excluded from project serialization (ideal for RT triple-buffer bridges, queues, sockets).
+  - `ComponentFlag::Networked`: Replicated across network transport layers.
+  - `ComponentFlag::Hidden`: Hidden from end-user UI inspector trees.
+- **`authority`**:
+  - `ReplicationAuthority::LocalOnly` (default).
+  - `ReplicationAuthority::ServerAuthoritative`: Replicated Server -> Client.
+  - `ReplicationAuthority::ClientAuthoritative`: Replicated Client -> Server.
+- **Lifecycle Callbacks (`onUpdated`, `onCreated`, `onRemoved`)**:
+  - `.onUpdated = [](Entity e) { ... }`: Executed whenever component fields are modified via `UpdateComponent` or remote delta sync.
+  - `.onCreated = [](Entity e) { ... }`: Executed when the component is first attached.
+  - `.onRemoved = [](Entity e) { ... }`: Executed when the component is removed.
+- **Custom UI Drawer (`setCustomDrawer<T>`)**:
+  - Overrides the default property-by-property reflection drawer with a specialized custom ImGui widget.
 
 ---
 
@@ -376,11 +441,14 @@ Pre-packaged, domain-agnostic discrete mutations and dispatcher sink connectors 
 - `Brezel::Mutations::ClearProject`: Clears all entities in the project.
 - `Brezel::Mutations::CreateEntity`: Creates a new entity with optional UUID and display name.
 - `Brezel::Mutations::RenameEntity`: Renames an entity asynchronously.
+- `Brezel::Mutations::UpdateComponent`: Generic state mutation carrying a binary serialized component payload, updating the target entity and invoking its `onUpdated` hook under `world.write()`.
+- `Brezel::Mutations::RemoveComponent`: Generic mutation detaching a component by `StringID` and invoking its `onRemoved` hook under `world.write()`.
+- `Brezel::Mutations::AddComponent`: Generic mutation instantiating a registered component by `StringID` and invoking its `onCreated` hook under `world.write()`.
 - `Brezel::Mutations::AttachStream<T, Tag>`: Attaches a `StreamComponent<T, Tag>` to an entity.
 - `Brezel::Mutations::DetachStream<T, Tag>`: Detaches a `StreamComponent<T, Tag>` from an entity.
 - `Brezel::Mutations::AttachQueue<T, Capacity, Tag>`: Attaches a `QueueComponent<T, Capacity, Tag>` to an entity.
 - `Brezel::Mutations::DetachQueue<T, Capacity, Tag>`: Detaches a `QueueComponent<T, Capacity, Tag>` from an entity.
-- `Brezel::Mutations::registerStandardMutationHandlers(project, dispatcher)`: Automatically registers lifecycle handlers.
+- `Brezel::Mutations::registerStandardMutationHandlers(project, dispatcher)`: Automatically registers lifecycle and generic component handlers.
 - `Brezel::Mutations::registerStreamMutationHandlers<T, Tag>(project, dispatcher)`: Automatically registers typed stream handlers.
 - `Brezel::Mutations::registerQueueMutationHandlers<T, Capacity, Tag>(project, dispatcher)`: Automatically registers typed queue handlers.
 
