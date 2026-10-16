@@ -271,6 +271,7 @@ inline void reflectEntityComponents(Entity entity, ComponentVisitor &visitor) {
     if (storage.contains(entt_entity) &&
         componentInfoById.contains(componentTypeId)) {
       const ComponentTypeInfo &info = componentInfoById.at(componentTypeId);
+      if (info.saveString == StringID::from("IdentityComponent")) continue;
       if (visitor.beginComponent(info.saveString)) {
         info.reflect(entity, visitor);
         visitor.endComponent();
@@ -284,7 +285,9 @@ inline bool addReflectEntityComponent(Entity entity, StringID componentTypeName,
   if (componentInfoByTypeName.contains(componentTypeName)) {
     auto &info = componentInfoByTypeName[componentTypeName];
     if (visitor.beginComponent(componentTypeName)) {
-      info.createComponent(entity);
+      if (!info.hasComponent || !info.hasComponent(entity)) {
+        info.createComponent(entity);
+      }
       info.reflect(entity, visitor);
       visitor.endComponent();
     }

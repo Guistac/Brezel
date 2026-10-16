@@ -290,6 +290,9 @@ Because of the reflection system, the XML output is clean, semantic, and highly 
 </Project>
 ```
 
+> [!NOTE]
+> Entity identity metadata (`Name`, `DisplayName`, and `UUID`) is persisted strictly as XML attributes on the `<Entity>` root element. `reflectEntityComponents` excludes `IdentityComponent` from child element reflection to prevent duplicate tags, and `addReflectEntityComponent` guards component creation to preserve pre-existing entity component instances.
+
 ### 6.3 High-Speed Binary Serialization (`BinaryVisitor.hpp`)
 For network state replication, IPC streaming, or fast component caching, Brezel provides compact, zero-copy binary visitors:
 - `Brezel::BinarySerializer`: Serializes reflected component properties into a contiguous byte vector.

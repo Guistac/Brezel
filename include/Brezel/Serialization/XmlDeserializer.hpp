@@ -271,6 +271,8 @@ inline void loadEntity(Project& project, tinyxml2::XMLElement* entityXmlNode, De
           for(auto childEntityXml = childXmlNode->FirstChildElement(entityTagString); childEntityXml; childEntityXml = childEntityXml->NextSiblingElement(entityTagString)){
             loadEntity(project, childEntityXml, report, &loadedEntity);
           }
+      } else if (xmlTagName == "IdentityComponent") {
+          continue;
       } else {
         ComponentLoadVisitor visitor(loadedEntity, childXmlNode, report);
         if (!ComponentRegistry::addReflectEntityComponent( loadedEntity, StringID::from(xmlTagName), visitor))
