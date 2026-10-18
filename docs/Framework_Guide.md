@@ -174,6 +174,7 @@ Brezel::Entity clonedEntity = sourceEntity.clone("Cloned Robot");
 // 2. ComponentRegistry Helper
 Brezel::Entity clonedEntity = Brezel::ComponentRegistry::cloneEntity(sourceEntity, "Custom Name");
 ```
+Both helpers write the registry directly and neither registers the clone's UUID in the `Project` nor fires an event, so call them only where you hold the writer's lock. From any other thread (a GUI, a script, a network handler) push `Brezel::Mutations::CloneEntity{ sourceUuid, sourceHandle, newUuid, newName }` (`StandardMutations.hpp`) instead. Brezel registers no handler for it: the host's handler, applied inside the writer's lock, creates the clone through `Project::createEntityWithUUID` (so it is in the UUID map), copies the registered, non-transient components, runs their `onCreated` hooks, fires `Events::EntitySpawned` and refuses the sources its policy protects. The producer can pass its own `newUuid` to find the clone once the mutation has been applied; 0 lets the handler generate one.
 
 ### 4.5 Component Authoring & Automation Quick Reference
 

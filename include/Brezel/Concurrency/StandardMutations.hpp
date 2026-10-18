@@ -50,6 +50,30 @@ struct CreateEntity {
 };
 
 /**
+ * @brief Standard discrete mutation to duplicate an entity in a Project.
+ *
+ * The clone gets a new UUID, is registered like any created entity and receives copies of the source's registered,
+ * non-transient components. The producer may choose `newUuid` (to find the clone once the writer has applied the
+ * mutation); 0 lets the handler generate one. An empty `newName` means "<source name> (Copy)". Brezel registers no
+ * handler: duplication policy (which entities may be cloned, which events fire) belongs to the host, which applies the
+ * mutation inside its writer's lock instead of calling `Entity::clone()` from another thread.
+ */
+struct CloneEntity {
+    UUID sourceUuid{0};
+    Entity source{};
+    UUID newUuid{0};
+    char newName[64]{0};
+
+    CloneEntity() = default;
+    CloneEntity(UUID srcId, Entity src, UUID cloneId, std::string_view cloneName = {})
+        : sourceUuid(srcId), source(src), newUuid(cloneId) {
+        size_t n = std::min(cloneName.size(), sizeof(newName) - 1);
+        std::memcpy(newName, cloneName.data(), n);
+        newName[n] = '\0';
+    }
+};
+
+/**
  * @brief Standard discrete mutation to rename an entity in a Project.
  */
 struct RenameEntity {
@@ -156,6 +180,7 @@ struct AddComponent {
 static_assert(std::is_trivially_copyable_v<DestroyEntity>, "DestroyEntity must be trivially copyable POD");
 static_assert(std::is_trivially_copyable_v<ClearProject>, "ClearProject must be trivially copyable POD");
 static_assert(std::is_trivially_copyable_v<CreateEntity>, "CreateEntity must be trivially copyable POD");
+static_assert(std::is_trivially_copyable_v<CloneEntity>, "CloneEntity must be trivially copyable POD");
 static_assert(std::is_trivially_copyable_v<RenameEntity>, "RenameEntity must be trivially copyable POD");
 static_assert(std::is_trivially_copyable_v<RemoveComponent>, "RemoveComponent must be trivially copyable POD");
 static_assert(std::is_trivially_copyable_v<AddComponent>, "AddComponent must be trivially copyable POD");
