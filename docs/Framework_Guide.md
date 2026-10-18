@@ -360,7 +360,12 @@ Example: `Winch1.MotorConfig.maxVelocity`
 Brezel provides a suite of generic, stage-agnostic concurrency primitives in `include/Brezel/Concurrency/` and `include/Brezel/Core/`:
 
 ### 9.1 Lock-Free Bridges
-- **`Brezel::TripleBuffer<T>`**: Lock-free, wait-free Simpson 3-slot asynchronous buffer for high-frequency producer/consumer communication (e.g. 1 kHz RT thread <-> NRT thread) without blocking or mutexes.
+- **`Brezel::TripleBuffer<T>`**: Lock-free, wait-free Simpson 4-slot asynchronous buffer (two pairs of two slots) for high-frequency producer/consumer communication (e.g. RT thread <-> NRT thread) without blocking or mutexes. Latest value wins; older unread values are overwritten.
+  - **One writer, one reader.** Exactly one thread calls `write()` (several producers are allowed only when one mutex serializes them, as `MotionIngress` does) and exactly one thread calls `read()`. A second unsynchronized writer breaks the algorithm.
+  - **Memory ordering (BUG-22, 2026-10-20).** The reader's store of `readingPair_` followed by its load of `slotInPair_`, and the writer's stores followed by its next load of `readingPair_`, form a store-buffering pattern that release/acquire does not order. `write()` starts with a `seq_cst` fence and `read()` has one between the `readingPair_` store and the `slotInPair_` load. Without them two back-to-back writes tore about one read in 100,000 on an arm64 Mac; with them none (stress test in `tests/test_stage_ecs.cpp`).
+  - **`hasNew()` / `read()`.** `read()` clears the flag (atomic exchange) before it chooses the pair, so a write landing during the copy keeps its flag and the next `if (hasNew()) read()` picks it up. `read()` always returns the latest value, new or not.
+  - **`readLatest()`** is a peek without the reader handshake: it does not clear the flag and may tear against a concurrent write. Use it only for display, never for control data.
+  - Payloads must be trivially copyable.
 - **`Brezel::RingBuffer<T, Capacity>`**: Fixed-capacity lock-free SPSC circular FIFO for bounded streaming packets.
 
 ### 9.2 Periodic Loop (`Brezel::PeriodicLoop`)
