@@ -387,11 +387,11 @@ Double-buffered MPSC queue for thread boundary crossing (e.g., UI/Scripts -> Wor
 *(Differentiated from `CommandStack`: `CommandStack` manages polymorphic GUI Undo/Redo history, whereas `MutationQueue` carries discrete POD state mutations into the ECS).*
 
 ### 9.4 Type-Erased Mutation Envelope (`Brezel::AnyMutation`)
-Bounded 256-byte stack envelope for open-ended mutation routing across subsystems without a centralized static variant:
+Bounded 512-byte stack envelope (`AnyMutation::STORAGE_SIZE`; raised from 256 so a 16-marker optical constellation update fits, Stacato D-74) for open-ended mutation routing across subsystems without a centralized static variant:
 - Subsystems across the repo define their own discrete mutation structs locally (e.g., `MecanumConfigMutation`, `UpdateShapeVertices`).
-- Enforces `sizeof(T) <= 256` at compile time. Zero heap allocation inside the envelope itself.
+- Enforces `sizeof(T) <= STORAGE_SIZE` at compile time; mutation headers assert against `Brezel::AnyMutation::STORAGE_SIZE`, not a literal. Zero heap allocation inside the envelope itself.
 - Trivially copyable PODs execute with zero-overhead `std::memcpy` and no-op destruction.
-- Payloads exceeding 256 bytes (or dense geometric/spline data) explicitly store large data in `std::shared_ptr`; `AnyMutation` safely manages placement construction, destruction, and reference-counted copy/move semantics via type-erased function pointers.
+- Payloads exceeding 512 bytes (or dense geometric/spline data) explicitly store large data in `std::shared_ptr`; `AnyMutation` safely manages placement construction, destruction, and reference-counted copy/move semantics via type-erased function pointers.
 - When drained, `mutation.execute(dispatcher)` unpacks and dispatches the typed event to connected subsystem listeners.
 
 ### 9.5 Event Dispatcher Quarantine Wrapper (`Brezel::Dispatcher`)

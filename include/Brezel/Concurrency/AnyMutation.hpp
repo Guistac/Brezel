@@ -12,7 +12,7 @@ namespace Brezel {
 /**
  * @brief Fixed-size type-erased mutation envelope for crossing thread boundaries.
  * 
- * Enforces a strict 256-byte maximum capacity on the stack.
+ * Enforces a strict 512-byte maximum capacity on the stack.
  * Trivially copyable PODs use zero-overhead memcpy and no-op destruction.
  * Payloads with non-trivial lifecycle (e.g. std::shared_ptr payloads for massive
  * data like CAD meshes, dense polygon contours, or multi-point spline paths)
@@ -20,7 +20,7 @@ namespace Brezel {
  */
 class AnyMutation {
 public:
-    static constexpr size_t STORAGE_SIZE = 256;
+    static constexpr size_t STORAGE_SIZE = 512;
 
     AnyMutation() = default;
 
@@ -56,7 +56,7 @@ public:
     AnyMutation(T&& mutation) {
         using CleanT = std::decay_t<T>;
         static_assert(sizeof(CleanT) <= STORAGE_SIZE,
-            "Mutation struct exceeds 256 bytes! For larger payloads, store large data in std::shared_ptr.");
+            "Mutation struct exceeds 512 bytes! For larger payloads, store large data in std::shared_ptr.");
         static_assert(alignof(CleanT) <= 64,
             "Mutation struct alignment exceeds 64-byte storage alignment.");
 
