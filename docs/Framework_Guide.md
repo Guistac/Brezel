@@ -437,6 +437,7 @@ Thread safety across NRT systems (UI rendering, serialization, supervisor ticks,
 - **`Project::resolveEntity(uuid, fallback)`**: Resolves an entity either by its persistent `UUID` or by a local fallback `Entity` handle.
 - **`Project::getEntities()`**: Returns a const reference to the internal `std::unordered_map<UUID, Entity>` of all registered entities in the project for lock-free mutation handler traversal.
 - Eliminates manual lock management and prevents data races across concurrent NRT threads while maintaining 100% EnTT quarantine.
+- `Entity` handles still reach live components without a guard; the **ECS wall** (section 9.11) counts and locates every such access at runtime.
 
 ### 9.9 Cross-Platform Thread Naming (`Brezel::setThreadName`)
 Located in `Brezel/Concurrency/ThreadUtils.hpp`:
@@ -464,6 +465,31 @@ Pre-packaged, domain-agnostic discrete mutations and dispatcher sink connectors 
 - `Brezel::Events::ComponentChanged`: Event emitted when an entity's component is modified via `SetComponent` or `UpdateComponent`.
 - `Brezel::Events::EntitySpawned`: Event emitted when an entity is spawned into the scene.
 - `Brezel::Events::EntityDestroyed`: Event emitted when an entity is permanently removed from the scene.
+
+### 9.11 ECS wall (`Brezel/Core/EcsWall.hpp`)
+A runtime check of the one ECS access rule: **a thread touches entity components only while it holds a `read()` or
+`write()` scope of the project, or when it is the project's writer thread.**
+- **State**: each `Project` owns an `EcsWall`, published in its registry context (`ctx()`, type `EcsWall*`). The wall
+  holds the writer thread id (`Project::setWriterThread(id)`, set by whoever runs the single-writer loop, on that
+  thread; an empty id clears it). `ReadAccess` / `WriteAccess` record their scope in a thread-local table (up to 8
+  projects per thread; a moved guard is counted once).
+- **Checked accessors**: `Entity::add`, `add_or_replace` (up to 4 constructor arguments), `remove`, `has`, `try_get`,
+  `get`, `isValid`, `operator bool`, `getParent`, `getName`, `getUUID`, `getPath`, `setParent`, and
+  `Project::destroyEntity`, `resolveEntity`, `getEntityByPath`. Each takes a trailing defaulted
+  `std::source_location`, so the site is the caller's line (`operator bool` cannot take one: its site is
+  `Entity.hpp`). `handle()` and `registry()` are unchecked escape hatches. Entities of a plain `entt::registry` (no
+  project, e.g. a GUI scratch copy) are never checked.
+- **On a violation**: an atomic total is incremented and the site is recorded in a fixed table of `EcsWall::kMaxSites`
+  (32) slots: file, line, function, thread name (`"main"` for the unnamed process main thread, else the id in hex),
+  first time (steady clock, ns) and count per site, keyed by file, line and thread. Recording is lock-free and
+  allocation-free; a full table counts `unrecordedViolations()`. The violating thread only records.
+- **Mode**: without `NDEBUG` a violation prints the site to stderr and calls `std::abort()`, unless the environment
+  holds `BREZEL_ECS_WALL=count` **when the project is constructed** (a temporary crutch for test runs; never set it in
+  code or build files). With `NDEBUG` the wall only counts.
+- **Reading it** (any thread): `totalViolations()`, `unrecordedViolations()`, `siteCount()`, `site(i, SiteInfo&)`
+  (false while slot `i` is empty or being filled). The writer loop's owner polls `site()` and logs each new site once;
+  the destructor prints the total and every site to stderr when there was a violation.
+- **Cost**: one registry-context lookup, one thread-id compare and a scan of at most 8 thread-local entries per access.
 
 
 

@@ -6,8 +6,11 @@
 #include <memory>
 #include <unordered_map>
 #include <vector>
+#include <thread>
+#include <source_location>
 
 #include "Brezel/Command/CommandStack.hpp"
+#include "Brezel/Core/EcsWall.hpp"
 #include "Brezel/Core/Entity.hpp"
 #include "Brezel/Core/UUIDProvider.hpp"
 #include "Brezel/Core/Dispatcher.hpp"
@@ -17,14 +20,20 @@ namespace Brezel {
 /// @brief Represents a single Brezel project, containing all entities and systems.
 /// @details The Project class owns the EnTT registry and the command stack.
 /// It serves as the top-level container for a simulation or game scene.
-/// Thread safety is enforced framework-wide via RAII ReadAccess and WriteAccess guards.
+/// Thread safety is enforced framework-wide via RAII ReadAccess and WriteAccess guards, and checked at runtime by the
+/// project's ECS wall (EcsWall.hpp): an Entity access off the writer thread without a live guard is counted and located.
 class Project {
 public:
     /// @brief Scoped RAII shared-lock guard providing const-only access to the EnTT registry.
     class ReadAccess {
     public:
-        ReadAccess(const entt::registry& registry, std::shared_mutex& mutex)
-            : m_registry(registry), m_lock(mutex) {}
+        ReadAccess(const entt::registry& registry, std::shared_mutex& mutex, const EcsWall* wall = nullptr)
+            : m_registry(registry), m_lock(mutex), m_wall(wall) {
+            if (m_wall) m_wall->enterScope();
+        }
+        ~ReadAccess() {
+            if (m_wall && m_lock.owns_lock()) m_wall->leaveScope();
+        }
         ReadAccess(ReadAccess&&) noexcept = default;
         ReadAccess& operator=(ReadAccess&&) = delete;
         ReadAccess(const ReadAccess&) = delete;
@@ -69,13 +78,19 @@ public:
     private:
         const entt::registry& m_registry;
         std::shared_lock<std::shared_mutex> m_lock;
+        const EcsWall* m_wall = nullptr;
     };
 
     /// @brief Scoped RAII unique-lock guard providing mutable access to the EnTT registry.
     class WriteAccess {
     public:
-        WriteAccess(entt::registry& registry, std::shared_mutex& mutex)
-            : m_registry(registry), m_lock(mutex) {}
+        WriteAccess(entt::registry& registry, std::shared_mutex& mutex, const EcsWall* wall = nullptr)
+            : m_registry(registry), m_lock(mutex), m_wall(wall) {
+            if (m_wall) m_wall->enterScope();
+        }
+        ~WriteAccess() {
+            if (m_wall && m_lock.owns_lock()) m_wall->leaveScope();
+        }
         WriteAccess(WriteAccess&&) noexcept = default;
         WriteAccess& operator=(WriteAccess&&) = delete;
         WriteAccess(const WriteAccess&) = delete;
@@ -142,12 +157,14 @@ public:
     private:
         entt::registry& m_registry;
         std::unique_lock<std::shared_mutex> m_lock;
+        const EcsWall* m_wall = nullptr;
     };
 
     Project(std::string_view name) :
         m_name(name)
         {
             m_registry.ctx().emplace<CommandStack*>(&m_commandStack);
+            m_registry.ctx().emplace<EcsWall*>(&m_wall);
         }
 
     Project(const Project&) = delete;
@@ -157,10 +174,18 @@ public:
     std::string_view getName() const { return m_name; }
 
     /// @brief Acquire RAII shared-lock read access to the EnTT registry (const-only).
-    [[nodiscard]] ReadAccess read() const { return ReadAccess(m_registry, m_mutex); }
+    [[nodiscard]] ReadAccess read() const { return ReadAccess(m_registry, m_mutex, &m_wall); }
 
     /// @brief Acquire RAII unique-lock write access to the EnTT registry (mutable).
-    [[nodiscard]] WriteAccess write() { return WriteAccess(m_registry, m_mutex); }
+    [[nodiscard]] WriteAccess write() { return WriteAccess(m_registry, m_mutex, &m_wall); }
+
+    /// @brief Records the single writer thread, the one thread allowed to access entities without a scope.
+    /// Called by the owner of the writer loop on that thread; an empty id clears it. Any thread.
+    void setWriterThread(std::thread::id id) noexcept { m_wall.setWriterThread(id); }
+
+    /// @brief The project's ECS wall: violation total and recorded sites. Any thread.
+    EcsWall& ecsWall() noexcept { return m_wall; }
+    const EcsWall& ecsWall() const noexcept { return m_wall; }
 
     /// @brief Returns the project's undo/redo command stack.
     CommandStack&    getStack()      { return m_commandStack; }
@@ -193,12 +218,12 @@ public:
     }
 
     /// @brief Permanently removes an entity from the project.
-    void destroyEntity(Entity& ent) {
-        if(ent.has<IdentityComponent>()){
-            auto identity = ent.get<IdentityComponent>();
+    void destroyEntity(Entity& ent, std::source_location loc = std::source_location::current()) {
+        if(ent.has<IdentityComponent>(loc)){
+            auto identity = ent.get<IdentityComponent>(loc);
             entitiesByUUID.erase(identity.uuid);
         }
-        if(ent.isValid()){
+        if(ent.isValid(loc)){
             m_registry.destroy(ent.handle().entity());
         }
     }
@@ -214,12 +239,12 @@ public:
     const std::unordered_map<UUID, Entity>& getEntities() const noexcept { return entitiesByUUID; }
 
     /// @brief Resolves an entity either by persistent UUID (primary) or local handle fallback.
-    Entity resolveEntity(UUID uuid, Entity fallback = {}) {
+    Entity resolveEntity(UUID uuid, Entity fallback = {}, std::source_location loc = std::source_location::current()) {
         if (uuid.isValid()) {
             auto ent = getEntityByUUID(uuid);
-            if (ent.isValid()) return ent;
+            if (ent.isValid(loc)) return ent;
         }
-        if (fallback.isValid() && &fallback.registry() == &m_registry) {
+        if (fallback.isValid(loc) && &fallback.registry() == &m_registry) {
             return fallback;
         }
         return Entity(m_registry);
@@ -241,7 +266,7 @@ public:
 
     /// @brief Resolves an entity handle from a path string (e.g., "Parent/Child/Grandchild").
     /// @return An Entity handle (check isValid() to see if lookup succeeded).
-    Entity getEntityByPath(std::string_view path) {
+    Entity getEntityByPath(std::string_view path, std::source_location loc = std::source_location::current()) {
         if (path.empty()) return Entity(m_registry);
         
         std::vector<std::string_view> tokens;
@@ -261,13 +286,13 @@ public:
             }
         }
 
-        if (!current) return current;
+        if (!current.isValid(loc)) return current;
 
         for (size_t i = 1; i < tokens.size(); ++i) {
             bool found_child = false;
-            auto& hier = current.get<HierarchyComponent>();
+            auto& hier = current.get<HierarchyComponent>(loc);
             for (auto child : hier.children) {
-                if (child.has<IdentityComponent>() && child.get<IdentityComponent>().name == tokens[i]) {
+                if (child.has<IdentityComponent>(loc) && child.get<IdentityComponent>(loc).name == tokens[i]) {
                     current = child;
                     found_child = true;
                     break;
@@ -319,6 +344,7 @@ private:
         return entity;
     }
 
+    mutable EcsWall m_wall;         // declared first: outlives the registry, prints its summary last
     entt::registry  m_registry;
     mutable std::shared_mutex m_mutex;
     CommandStack    m_commandStack;
