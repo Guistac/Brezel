@@ -490,6 +490,16 @@ A runtime check of the one ECS access rule: **a thread touches entity components
 - **Reading it** (any thread): `totalViolations()`, `unrecordedViolations()`, `siteCount()`, `site(i, SiteInfo&)`
   (false while slot `i` is empty or being filled). The writer loop's owner polls `site()` and logs each new site once;
   the destructor prints the total and every site to stderr when there was a violation.
+- **Named waivers** (`EcsWallWaiver`): a stack object that names a known violation while it lives on its thread:
+  `const Brezel::EcsWallWaiver waiver{"thread", "reason", "follow-up task"};` (string literals; the constructor
+  also takes a defaulted `std::source_location`). An access the wall would reject is then not a violation: it is
+  counted in `waivedAccesses()` and recorded in a second fixed table of `kMaxWaivedSites` (32) slots keyed by the
+  **waiver's** file and line and the thread, whose `SiteInfo` also carries `reason` and `followUp`
+  (`waivedSiteCount()`, `waivedSite(i, SiteInfo&)`, `unrecordedWaivedAccesses()`); it never asserts. The access
+  itself is unchanged. The waiver covers everything called inside its scope on its thread (any project's wall);
+  waivers nest and the innermost one is recorded. Thread-local pointer, no lock, no allocation. Waived accesses are
+  not in `totalViolations()`; the destructor prints them after the violations. A waiver is debt, not a fix: each one
+  names the task that removes it.
 - **Cost**: one registry-context lookup, one thread-id compare and a scan of at most 8 thread-local entries per access.
 
 
