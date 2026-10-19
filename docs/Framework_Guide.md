@@ -502,7 +502,45 @@ A runtime check of the one ECS access rule: **a thread touches entity components
   names the task that removes it.
 - **Cost**: one registry-context lookup, one thread-id compare and a scan of at most 8 thread-local entries per access.
 
+---
 
+## 10. Fitting Math (`Brezel/Math/`)
 
+Header-only, C++20, thread-agnostic, no allocation and no storage of the input (D-73). Doubles throughout. First user:
+the optical mount calibration in Stacato (D-71, D-74 point 6); tested through Stacato's `tests/test_calibration.cpp`
+until Brezel has its own test target.
 
+### 10.1 Dense linear least squares (`LeastSquares.hpp`)
+`Brezel::Math::LeastSquares<N>` (N = 1 to 8 unknowns) folds equations in one at a time and never keeps them:
+- `addRow(std::array<double, N> a, double b, double weight = 1.0)`: one equation `a . x = b`; a non-finite value or a
+  weight that is not positive marks the problem invalid.
+- `solve()` returns `LeastSquaresSolution<N>`: `ok`, `x`, `residualRms` (`sqrt(sum(w * r^2) / rows)` at the minimum),
+  `rows`, `usedQr`.
+- Two factorizations are updated per row: the normal equations, solved by Cholesky (the usual path), and an
+  upper-triangular QR factor updated by Givens rotations, used when a Cholesky pivot falls below `1e-10` of its diagonal
+  (ill-conditioned for the squared system). The QR factor also gives the exact minimum residual. A QR diagonal below
+  `1e-9` of the largest (rank deficient), fewer rows than unknowns, or invalid input returns `ok == false`.
+- Cost per row: O(N^2); `solve()` is O(N^3) on the stack.
 
+```cpp
+Brezel::Math::LeastSquares<4> ls;                 // spin: x = cx + cos(a) qx - sin(a) qy, y = cy + sin(a) qx + cos(a) qy
+for (const auto& s : samples) {
+    ls.addRow({1, 0, std::cos(s.yaw), -std::sin(s.yaw)}, s.x);
+    ls.addRow({0, 1, std::sin(s.yaw),  std::cos(s.yaw)}, s.y);
+}
+const auto sol = ls.solve();                       // sol.x = {cx, cy, qx, qy}
+```
+
+### 10.2 Total least-squares 2D line (`LineFit.hpp`)
+`LineFitAccumulator` keeps a running mean and co-moments (Welford): `add(x, y)`, `count()`, `fit()`. `LineFit2D`:
+`ok` (at least 2 distinct points), `centroid`, unit `direction` (principal axis of the point covariance; its sign is
+arbitrary, orient it with a displacement), `rms` (perpendicular RMS, the square root of the small eigenvalue; about
+`1e-8` on exact data because of the cancellation), `extent` (standard deviation along the line), `count`. Free
+functions: `fitLine2D(n, pointAt)` where `pointAt(i)` returns something indexable `[0]`, `[1]`, and
+`fitLine2D(const double* x, const double* y, n)`.
+
+### 10.3 Kasa circle fit (`CircleFit.hpp`)
+`fitCircleKasa(n, pointAt)` and `fitCircleKasa(x, y, n)` return `CircleFit2D`: `ok` (at least 3 non-collinear points),
+`centre`, `radius`, `rms` (of distance minus radius), `count`. Algebraic fit (`x^2 + y^2 + D x + E y + F = 0` through
+`LeastSquares<3>` on coordinates shifted to the first point), two passes over the points. It is biased towards smaller
+radii on short noisy arcs: use it as a cross-check, not as the only estimate.
