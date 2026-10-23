@@ -34,7 +34,9 @@ public:
         // and against the reader's store of readingPair_; without it two back-to-back writes can land in the slot
         // the reader is copying (torn reads measured on arm64)
         std::atomic_thread_fence(std::memory_order_seq_cst);
-        bool pair = !readingPair_.load(std::memory_order_relaxed);
+        // Acquire (BUG-90): pairs with the reader's release store of readingPair_, which follows its copy of the
+        // previous value, so that copy happens before this write reuses the slot (formally, not only on arm64)
+        bool pair = !readingPair_.load(std::memory_order_acquire);
         bool slot = !slotInPair_[pair ? 1 : 0].load(std::memory_order_relaxed);
 
         data_[pair ? 1 : 0][slot ? 1 : 0] = val;

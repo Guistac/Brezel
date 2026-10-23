@@ -26,7 +26,9 @@ public:
      * @return true if successful, false if the queue is full.
      */
     bool push(const T& value) {
-        const size_t current_tail = tail_.load(std::memory_order_relaxed);
+        // Acquire (BUG-90): pairs with pop()'s release store of tail_, so the consumer's copy of a slot happens
+        // before this push overwrites it
+        const size_t current_tail = tail_.load(std::memory_order_acquire);
         const size_t current_head = head_.load(std::memory_order_relaxed);
         
         // Next head index
