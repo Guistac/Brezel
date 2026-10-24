@@ -7,6 +7,9 @@
 #include "Brezel/Core/Dispatcher.hpp"
 #include "Brezel/Core/Project.hpp"
 #include <entt/entt.hpp>
+#include <functional>
+#include <optional>
+#include <vector>
 
 namespace Brezel {
 
@@ -147,6 +150,41 @@ inline std::unordered_map<::entt::id_type, ComponentTypeInfo> componentInfoById;
 inline std::unordered_map<StringID, ComponentTypeInfo> componentInfoByTypeName;
 inline Project* s_activeProject{nullptr};
 inline Dispatcher* s_activeDispatcher{nullptr};
+
+/**
+ * @brief A per-entity replication authority override.
+ *
+ * Returns the authority of the component `info` on `entity`, or std::nullopt to leave the decision to the next rule
+ * (and finally to the type's `info.authority`). A rule reads only the entity's own components, never another entity
+ * or any global state, and changes nothing.
+ * Thread: any thread that has world access (holds a world lock, or is the world's single writer) when it calls
+ * authorityFor().
+ */
+using AuthorityRule = std::function<std::optional<ReplicationAuthority>(const Entity&, const ComponentTypeInfo&)>;
+
+inline std::vector<AuthorityRule> authorityRules;
+
+/**
+ * @brief Registers a per-entity authority rule; rules are evaluated in registration order, the first that answers wins.
+ * Thread: startup only (the thread that registers components), before any replication starts; the rule list is
+ * read-only afterwards, so authorityFor() takes no lock.
+ */
+inline void addAuthorityRule(AuthorityRule rule) {
+  if (rule) authorityRules.push_back(std::move(rule));
+}
+
+/**
+ * @brief The replication authority of component `info` on `entity`: the first registered rule that answers, else the
+ * type's `info.authority` (with no rule registered, always `info.authority`).
+ * Thread: any thread with world access to `entity` (holds a world lock, or is the world's single writer); the rules
+ * read the entity's components.
+ */
+inline ReplicationAuthority authorityFor(const Entity& entity, const ComponentTypeInfo& info) {
+  for (const auto& rule : authorityRules) {
+    if (auto authority = rule(entity, info)) return *authority;
+  }
+  return info.authority;
+}
 
 } // namespace ComponentRegistry
 

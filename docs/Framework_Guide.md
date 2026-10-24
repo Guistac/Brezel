@@ -165,6 +165,32 @@ ComponentRegistry::registerComponent<ShapeComponent>("ShapeComponent", {
 });
 ```
 
+#### Per-entity replication authority (`addAuthorityRule`, `authorityFor`)
+A component type's `authority` is fixed at registration. When ownership has to differ per entity (one entity owns a
+component that is server-owned on every other entity), register an authority rule and have the replication code ask
+`authorityFor(entity, info)` instead of reading `info.authority`:
+```cpp
+// A rule returns an authority, or std::nullopt to leave the decision to the next rule and finally to info.authority.
+ComponentRegistry::addAuthorityRule(
+    [](const Brezel::Entity& e, const ComponentRegistry::ComponentTypeInfo& info)
+        -> std::optional<ComponentRegistry::ReplicationAuthority> {
+        if (info.saveString == StringID::from("IdentityComponent") && e.has<OwnedByRemoteHostTag>())
+            return ComponentRegistry::ReplicationAuthority::ClientAuthoritative;
+        return std::nullopt;
+    });
+
+// Replication code (burst, edit routing, session-up send):
+const auto authority = ComponentRegistry::authorityFor(entity, info);
+```
+Rules:
+- The first rule that answers wins, in registration order; with no rule registered `authorityFor` returns
+  `info.authority`, so a project that registers none behaves exactly as with per-type authority.
+- Rules are registered at startup, on the thread that registers components, before any replication starts. The list
+  is read-only afterwards, which is why `authorityFor` takes no lock.
+- `authorityFor` is called where the caller already has world access to the entity (holds a world lock, or is the
+  world's single writer); it takes none itself.
+- A rule reads only the entity's own components: no other entity, no global or mutable state, no side effects.
+
 ### 4.4 Entity Cloning & Duplication
 Brezel provides high-level ECS cloning primitives that automatically allocate a new UUID, copy all registered non-transient components using `info.copyComponent`, and assign a new entity name:
 ```cpp
