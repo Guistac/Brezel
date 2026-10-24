@@ -448,6 +448,7 @@ Located in `Brezel/Concurrency/ThreadUtils.hpp`:
 - Cross-platform utility that labels the currently executing thread for LLDB/GDB debuggers, Xcode, VS Code, Instruments, and OS thread samplers.
 - Automatically handles platform differences (macOS `pthread_setname_np(name)` vs Linux `pthread_setname_np(pthread_self(), name)` vs Windows `SetThreadDescription`).
 - Automatically integrated into `Brezel::PeriodicLoop::start` to name periodic background workers.
+- `Brezel::makeNonRealtimeThread(avoidCpu)`: makes the calling thread `SCHED_OTHER` (priority 0) with an affinity of every configured CPU except `avoidCpu` (negative: all). On Linux a thread inherits its creator's policy, priority and CPU set, so a helper started from a real-time thread must call this first or it runs at real-time priority on the real-time core. Returns false if a call failed; a no-op on macOS and Windows.
 
 ### 9.10 Standard Lifecycle Mutations (`Brezel/Concurrency/StandardMutations.hpp`)
 Pre-packaged, domain-agnostic discrete mutations and dispatcher sink connectors for asynchronous entity lifecycle and continuous stream/queue management:

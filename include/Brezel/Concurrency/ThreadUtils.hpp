@@ -7,6 +7,8 @@
 #include <pthread.h>
 #elif defined(__linux__)
 #include <pthread.h>
+#include <sched.h>
+#include <unistd.h>
 #elif defined(_WIN32)
 #include <windows.h>
 #endif
@@ -35,6 +37,36 @@ inline void setThreadName(std::string_view name) {
     // Windows 10 1607+ / Windows Server 2016+
     std::wstring wideName(name.begin(), name.end());
     SetThreadDescription(GetCurrentThread(), wideName.c_str());
+#endif
+}
+
+/**
+ * @brief Makes the calling thread an ordinary time-shared thread that stays off one CPU.
+ *
+ * On Linux a new thread inherits its creator's scheduling policy, priority and CPU set: a helper started from a
+ * real-time thread runs at real-time priority on the real-time core unless it calls this first. Sets SCHED_OTHER
+ * (priority 0) and an affinity of every configured CPU except `avoidCpu` (negative: every CPU). Thread-agnostic: call
+ * it from the thread to change. A no-op returning true on macOS and Windows.
+ *
+ * @param avoidCpu The CPU the thread must not run on, usually the real-time core; negative for none.
+ * @return false if the policy or the affinity could not be set.
+ */
+inline bool makeNonRealtimeThread(int avoidCpu = -1) {
+#if defined(__linux__)
+    sched_param param{};
+    param.sched_priority = 0;
+    bool ok = pthread_setschedparam(pthread_self(), SCHED_OTHER, &param) == 0;
+    const long cpuCount = sysconf(_SC_NPROCESSORS_CONF);
+    cpu_set_t cpus;
+    CPU_ZERO(&cpus);
+    for (long cpu = 0; cpu < cpuCount && cpu < CPU_SETSIZE; cpu++) {
+        if (cpu != avoidCpu) CPU_SET(cpu, &cpus);
+    }
+    if (CPU_COUNT(&cpus) > 0) ok = pthread_setaffinity_np(pthread_self(), sizeof(cpus), &cpus) == 0 && ok;
+    return ok;
+#else
+    (void)avoidCpu;
+    return true;
 #endif
 }
 
