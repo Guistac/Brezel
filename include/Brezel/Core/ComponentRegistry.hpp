@@ -186,6 +186,24 @@ inline ReplicationAuthority authorityFor(const Entity& entity, const ComponentTy
   return info.authority;
 }
 
+/**
+ * @brief The receiving side's ownership guard: whether a delta of component `info` on `entity`, sent by a peer that
+ * holds `sender` authority (ServerAuthoritative: it came from the server; ClientAuthoritative: it came from a client),
+ * may be applied here. The owner is `authorityFor(entity, info)`.
+ * - From a client: refused when the server owns the component (type or rule); a client never overwrites it.
+ * - From the server: refused when a rule gives the component on this entity to the client. A component whose type is
+ *   ClientAuthoritative still takes the server's edits (the server is the owner's remote control panel; its burst
+ *   skips the type), so with no rule registered nothing a server sends is refused.
+ * - `sender` LocalOnly (origin not stated: local tools, tests): never refused.
+ * Thread: as authorityFor() (world access to `entity`).
+ */
+inline bool acceptsRemoteDelta(const Entity& entity, const ComponentTypeInfo& info, ReplicationAuthority sender) {
+  if (sender == ReplicationAuthority::LocalOnly) return true;
+  const ReplicationAuthority owner = authorityFor(entity, info);
+  if (sender == ReplicationAuthority::ClientAuthoritative) return owner != ReplicationAuthority::ServerAuthoritative;
+  return owner != ReplicationAuthority::ClientAuthoritative || info.authority == ReplicationAuthority::ClientAuthoritative;
+}
+
 } // namespace ComponentRegistry
 
 namespace Mutations::Internal {

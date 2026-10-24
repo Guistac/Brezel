@@ -191,6 +191,28 @@ Rules:
   world's single writer); it takes none itself.
 - A rule reads only the entity's own components: no other entity, no global or mutable state, no side effects.
 
+Guard on the receiving side (`acceptsRemoteDelta`): the code that applies a delta from a peer asks whether the sender
+may write that component on that entity, passing the sender's authority (`ServerAuthoritative` for a delta from the
+server, `ClientAuthoritative` for one from a client):
+```cpp
+if (!ComponentRegistry::acceptsRemoteDelta(entity, info, ComponentRegistry::ReplicationAuthority::ServerAuthoritative))
+    return;  // dropped: this side owns the component on this entity
+```
+| Owner here (`authorityFor`) | Delta from the server | Delta from a client |
+| :-- | :-- | :-- |
+| `ServerAuthoritative` | applied | dropped |
+| `ClientAuthoritative`, from the type | applied (the server is the owner's remote control panel; its burst skips the type) | applied |
+| `ClientAuthoritative`, from a rule | dropped | applied |
+| `LocalOnly` | applied | applied |
+
+- `sender` `LocalOnly` means the origin is not stated (local tools, tests): never dropped.
+- With no rule registered, nothing a server sends is dropped, so per-type behaviour is unchanged; a client's delta
+  for a server-owned type is dropped.
+- A sender uses the same resolution before sending: it does not send what the receiver would drop (the burst skips
+  client-owned components, a server edit of a rule-owned component stays local).
+- Both sides must register the same rules (they run the same startup code); an old peer without the rule keeps
+  sending, and the new receiver drops what it owns.
+
 ### 4.4 Entity Cloning & Duplication
 Brezel provides high-level ECS cloning primitives that automatically allocate a new UUID, copy all registered non-transient components using `info.copyComponent`, and assign a new entity name:
 ```cpp
