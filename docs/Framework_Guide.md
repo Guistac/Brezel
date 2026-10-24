@@ -450,6 +450,10 @@ Located in `Brezel/Concurrency/ThreadUtils.hpp`:
 - Automatically integrated into `Brezel::PeriodicLoop::start` to name periodic background workers.
 - `Brezel::makeNonRealtimeThread(avoidCpu)`: makes the calling thread `SCHED_OTHER` (priority 0) with an affinity of every configured CPU except `avoidCpu` (negative: all). On Linux a thread inherits its creator's policy, priority and CPU set, so a helper started from a real-time thread must call this first or it runs at real-time priority on the real-time core. Returns false if a call failed; a no-op on macOS and Windows.
 
+### 9.9b Raw monotonic clock (`Brezel/Foundation/MonotonicRawClock.hpp`)
+- `Brezel::monotonicRawNanoseconds()`: nanoseconds of a monotonic clock that no time correction steps or slews. Linux: `CLOCK_MONOTONIC_RAW`; `std::chrono::steady_clock` (`CLOCK_MONOTONIC`) never jumps but follows an NTP daemon's rate corrections, so a loop paced by it drifts against an external clock while the daemon corrects. macOS and Windows: `steady_clock`, already raw there.
+- Unspecified epoch: compare its values only with each other. Wait-free, safe on a real-time thread. Used to pace the EtherCAT cycle against the slaves' reference clock.
+
 ### 9.10 Standard Lifecycle Mutations (`Brezel/Concurrency/StandardMutations.hpp`)
 Pre-packaged, domain-agnostic discrete mutations and dispatcher sink connectors for asynchronous entity lifecycle and continuous stream/queue management:
 - `Brezel::Mutations::DestroyEntity`: Destroys an entity permanently by UUID or handle fallback.
