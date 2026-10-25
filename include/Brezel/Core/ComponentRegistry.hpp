@@ -204,6 +204,33 @@ inline bool acceptsRemoteDelta(const Entity& entity, const ComponentTypeInfo& in
   return owner != ReplicationAuthority::ClientAuthoritative || info.authority == ReplicationAuthority::ClientAuthoritative;
 }
 
+/**
+ * @brief The local side's authoring guard: whether this node may edit component `info` on `entity` locally.
+ * Refused only on a mirror of a client-hosted entity (RemoteMirrorTag) when an authority rule gives the component on this
+ * entity to the client: that edit would not be sent (the sender skips what the receiver drops, acceptsRemoteDelta) and
+ * would revert at the next session up. A component whose type is ClientAuthoritative stays editable on the mirror (the
+ * server is the owner's remote control panel and its edits are forwarded), and every non-mirror entity is editable.
+ * Interim: the only local guard Brezel has; a fully featured authoring model is still to be designed (Framework_Guide.md).
+ * Thread: as authorityFor() (world access to `entity`).
+ */
+inline bool acceptsLocalEdit(const Entity& entity, const ComponentTypeInfo& info) {
+  if (!entity.isValid() || !entity.has<RemoteMirrorTag>()) return true;
+  return authorityFor(entity, info) != ReplicationAuthority::ClientAuthoritative ||
+         info.authority == ReplicationAuthority::ClientAuthoritative;
+}
+
+/**
+ * @brief acceptsLocalEdit() for the entity's name (IdentityComponent); true when IdentityComponent is not registered.
+ * Used by the standard RenameEntity handler and by inspectors that show the name read-only.
+ * Thread: as authorityFor() (world access to `entity`).
+ */
+inline bool acceptsLocalRename(const Entity& entity) {
+  static const StringID identitySid = StringID::from("IdentityComponent");
+  const auto it = componentInfoByTypeName.find(identitySid);
+  if (it == componentInfoByTypeName.end()) return true;
+  return acceptsLocalEdit(entity, it->second);
+}
+
 } // namespace ComponentRegistry
 
 namespace Mutations::Internal {

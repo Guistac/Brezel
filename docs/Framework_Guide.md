@@ -213,6 +213,35 @@ if (!ComponentRegistry::acceptsRemoteDelta(entity, info, ComponentRegistry::Repl
 - Both sides must register the same rules (they run the same startup code); an old peer without the rule keeps
   sending, and the new receiver drops what it owns.
 
+Guard on the local side (`acceptsLocalEdit`, `acceptsLocalRename`, `RemoteMirrorTag`): the receiving guard alone lets a
+node edit locally a component that the remote host owns; the edit is never sent and reverts at the next session up. The
+application marks the local mirror of an entity hosted by a remote client with `RemoteMirrorTag` (where it binds the
+mirror, on the world's single writer; runtime state, not registered), and local authoring paths ask before editing:
+```cpp
+// Generic inspector: show the name read-only on a mirror whose name the client owns
+const bool readOnly = !ComponentRegistry::acceptsLocalRename(entity);
+// Any component: the standard RenameEntity handler already refuses (no change applied)
+if (!ComponentRegistry::acceptsLocalEdit(entity, info)) return;
+```
+| Entity | Component owner (`authorityFor`) | Local edit |
+| :-- | :-- | :-- |
+| no `RemoteMirrorTag` | any | allowed |
+| `RemoteMirrorTag` | `ServerAuthoritative` or `LocalOnly` | allowed |
+| `RemoteMirrorTag` | `ClientAuthoritative`, from the type | allowed (the server is the owner's remote control panel; the edit is forwarded) |
+| `RemoteMirrorTag` | `ClientAuthoritative`, from a rule | refused |
+
+- The standard `RenameEntity` handler calls `acceptsLocalRename()`: a refused rename changes nothing. Other standard
+  handlers do not call `acceptsLocalEdit()` yet.
+- `acceptsLocalRename()` returns true when `IdentityComponent` is not registered.
+
+**Not yet in Brezel: a fully featured runtime authoring model.** Today Brezel has replication ownership (type authority,
+per-entity rules, the receiving guard) and this one local guard. Still to design (Stacato O-15, after the show): a
+local-edit policy for every component and every standard handler; edits made on the side that does not own a
+component routed to the owner and applied there, so a remote edit (a rename from the server) works instead of being
+refused; the node's role (server, client, standalone) known to the framework; how ownership is declared (project,
+binding, runtime) and transferred; conflicts after a disconnection; what each side persists. `RemoteMirrorTag` and
+`acceptsLocalEdit()` are interim and will be replaced by that model.
+
 ### 4.4 Entity Cloning & Duplication
 Brezel provides high-level ECS cloning primitives that automatically allocate a new UUID, copy all registered non-transient components using `info.copyComponent`, and assign a new entity name:
 ```cpp

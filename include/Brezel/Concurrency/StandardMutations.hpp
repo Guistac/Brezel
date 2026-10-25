@@ -221,7 +221,8 @@ inline void handleCreateEntity(Project& project, const CreateEntity& m) {
 
 inline void handleRenameEntity(Project& project, const RenameEntity& m) {
     auto ent = project.resolveEntity(m.uuid, m.entity);
-    if (ent.isValid() && ent.template has<IdentityComponent>()) {
+    // A name authored by the remote host of a mirror is never renamed locally (ComponentRegistry::acceptsLocalRename)
+    if (ent.isValid() && ent.template has<IdentityComponent>() && ComponentRegistry::acceptsLocalRename(ent)) {
         auto& identity = ent.template get<IdentityComponent>();
         identity.name = m.newName;
         identity.displayName = m.newName;
