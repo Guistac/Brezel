@@ -531,6 +531,9 @@ Located in `Brezel/Concurrency/ThreadUtils.hpp`:
 - `Brezel::monotonicRawNanoseconds()`: nanoseconds of a monotonic clock that no time correction steps or slews. Linux: `CLOCK_MONOTONIC_RAW`; `std::chrono::steady_clock` (`CLOCK_MONOTONIC`) never jumps but follows an NTP daemon's rate corrections, so a loop paced by it drifts against an external clock while the daemon corrects. macOS and Windows: `steady_clock`, already raw there.
 - Unspecified epoch: compare its values only with each other. Wait-free, safe on a real-time thread. Used to pace the EtherCAT cycle against the slaves' reference clock.
 
+### 9.9c Remote clock estimate (`Brezel/Time/RemoteClockEstimator.hpp`)
+- Placeholder: `Brezel::RemoteClockEstimator` (`reset()`, `addSample(remoteNs, localNs)`, `hasEstimate()`, `offsetNs()`, `toLocalNs(remoteNs)`) estimates a remote monotonic clock's offset from the fastest arrival over a sliding window. Interface only, stub bodies; the section is written with the implementation.
+
 ### 9.10 Standard Lifecycle Mutations (`Brezel/Concurrency/StandardMutations.hpp`)
 Pre-packaged, domain-agnostic discrete mutations and dispatcher sink connectors for asynchronous entity lifecycle and continuous stream/queue management:
 - `Brezel::Mutations::DestroyEntity`: Destroys an entity permanently by UUID or handle fallback.
