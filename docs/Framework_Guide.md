@@ -38,7 +38,7 @@ Brezel::UUID uuid2 = Brezel::UUID::deriveFromString("Sensor_Rig_01");
 ```
 Both use 64-bit FNV-1a hashing to deterministically generate non-zero, valid `Brezel::UUID` instances.
 
-*Convenience Accessors & Equality:* `Brezel::Entity` provides `entity.getName()` and `entity.getUUID()` to query identity metadata directly without manual `try_get<IdentityComponent>()` lookups. It provides `operator==` and `operator!=` for exact EnTT handle equality comparison, and an `explicit operator bool()` for handle validity checks.
+*Convenience Accessors & Equality:* `Brezel::Entity` provides `entity.getName()`, `entity.getDisplayName()` and `entity.getUUID()` to query identity metadata directly without manual `try_get<IdentityComponent>()` lookups. It provides `operator==` and `operator!=` for exact EnTT handle equality comparison, and an `explicit operator bool()` for handle validity checks.
 
 ### 2.2 Hierarchy (Parent/Child)
 Parent-child relationships are handled by the `HierarchyComponent`.
@@ -568,7 +568,7 @@ A runtime check of the one ECS access rule: **a thread touches entity components
   thread; an empty id clears it). `ReadAccess` / `WriteAccess` record their scope in a thread-local table (up to 8
   projects per thread; a moved guard is counted once).
 - **Checked accessors**: `Entity::add`, `add_or_replace` (up to 4 constructor arguments), `remove`, `has`, `try_get`,
-  `get`, `isValid`, `operator bool`, `getParent`, `getName`, `getUUID`, `getPath`, `setParent`, and
+  `get`, `isValid`, `operator bool`, `getParent`, `getName`, `getDisplayName`, `getUUID`, `getPath`, `setParent`, and
   `Project::destroyEntity`, `resolveEntity`, `getEntityByPath`. Each takes a trailing defaulted
   `std::source_location`, so the site is the caller's line (`operator bool` cannot take one: its site is
   `Entity.hpp`). `handle()` and `registry()` are unchecked escape hatches. Entities of a plain `entt::registry` (no

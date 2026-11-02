@@ -132,6 +132,11 @@ public:
     /// @brief Convenience method to get the entity's debug name from IdentityComponent.
     std::string_view getName(Location loc = Location::current()) const;
 
+    /// @brief The name as the user typed it (IdentityComponent::displayName), for anything shown to a person.
+    /// getName() is the strict path-safe name (spaces and non-ASCII bytes become '_' on load); falls back to it
+    /// when the display name is empty.
+    std::string_view getDisplayName(Location loc = Location::current()) const;
+
     /// @brief Convenience method to get the entity's unique UUID from IdentityComponent.
     UUID getUUID(Location loc = Location::current()) const;
 
@@ -197,6 +202,13 @@ inline Entity Entity::getParent(Location loc) const {
 inline std::string_view Entity::getName(Location loc) const {
     if(auto identity = try_get<IdentityComponent>(loc)){
         return identity->name;
+    }
+    return "";
+}
+
+inline std::string_view Entity::getDisplayName(Location loc) const {
+    if(auto identity = try_get<IdentityComponent>(loc)){
+        return identity->displayName.empty() ? std::string_view(identity->name) : std::string_view(identity->displayName);
     }
     return "";
 }
