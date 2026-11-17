@@ -147,6 +147,33 @@ private:
     std::thread m_thread;
 };
 
+/**
+ * @brief Sets an environment variable (or unsets it, for a null value) while it lives, then restores the value it had
+ * before, or its absence. Thread: the test's thread, while no other thread reads the environment.
+ */
+class ScopedEnvironment {
+public:
+    ScopedEnvironment(const char* name, const char* value) : m_name(name) {
+        if (const char* old = std::getenv(name)) {
+            m_had = true;
+            m_old = old;
+        }
+        if (value) ::setenv(name, value, 1);
+        else ::unsetenv(name);
+    }
+    ~ScopedEnvironment() {
+        if (m_had) ::setenv(m_name, m_old.c_str(), 1);
+        else ::unsetenv(m_name);
+    }
+    ScopedEnvironment(const ScopedEnvironment&) = delete;
+    ScopedEnvironment& operator=(const ScopedEnvironment&) = delete;
+
+private:
+    const char* m_name;
+    bool m_had = false;
+    std::string m_old;
+};
+
 inline int runAll(int argc, char** argv, const char* suite) {
     const char* filter = argc > 1 ? argv[1] : nullptr;
     int failedTests = 0;

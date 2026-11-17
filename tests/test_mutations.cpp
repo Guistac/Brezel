@@ -178,7 +178,8 @@ BREZEL_TEST(anymutation_value_semantics, "Concurrency/AnyMutation.hpp",
 
 BREZEL_TEST(known_defect_B07_no_result, "Concurrency/AnyMutation.hpp",
             "a mutation has no result: execute() and every standard handler return void; a mutation type with no "
-            "connected handler and a handler whose target is missing do nothing and say nothing (09_BREZEL.md B-07)") {
+            "connected handler (a test type, and the standard CloneEntity) and a handler whose target is missing do "
+            "nothing and say nothing (09_BREZEL.md B-07)") {
     static_assert(std::is_void_v<decltype(std::declval<const AnyMutation&>().execute(std::declval<Dispatcher&>()))>);
     static_assert(std::is_void_v<decltype(Internal::handleCreateEntity(std::declval<Project&>(),
                                                                        std::declval<const CreateEntity&>()))>);
@@ -193,6 +194,14 @@ BREZEL_TEST(known_defect_B07_no_result, "Concurrency/AnyMutation.hpp",
     world.apply(RenameEntity(UUID(4242), {}, "x"));
     CHECK(log.events.empty());
     CHECK(world.project.getEntities().empty());
+
+    // CloneEntity is a standard struct with no Brezel handler: pushed alone, it is dropped (review R-A F-9)
+    CHECK(world.dispatcher.sink<CloneEntity>().empty());
+    world.project.createEntityWithUUID(UUID(4300), "source");
+    world.apply(CloneEntity(UUID(4300), {}, UUID(4301), "copy"));
+    CHECK(!world.project.getEntityByUUID(UUID(4301)).isValid());
+    CHECK_EQ(world.project.getEntities().size(), size_t(1));
+    CHECK(log.events.empty());
     log.disconnect(world.dispatcher);
 }
 

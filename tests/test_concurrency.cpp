@@ -124,6 +124,8 @@ BREZEL_TEST(triple_buffer_two_threads_no_tear, "Concurrency/TripleBuffer.hpp",
     uint64_t backwards = 0;
     uint64_t lastSeq = 0;
     Watchdog watchdog("triple buffer threads", 60s);
+    tb.write(Sample::make(0));  // a whole sample before the reader starts: before any write read() copies an all-zero
+                                // sample (BUG-55), which consistent() would count as torn (review R-A F-1)
     {
         ScopedThread writer([&](const std::atomic<bool>& stop) {
             for (uint64_t i = 1; i <= kWrites && !stop.load(std::memory_order_relaxed); ++i) tb.write(Sample::make(i));
@@ -318,12 +320,15 @@ BREZEL_TEST(triggered_capture_two_threads, "Concurrency/TriggeredCapture.hpp",
 // ---------------------------------------------------------------------------------------------------------------------
 
 BREZEL_TEST(periodic_loop_rate_and_stop, "Concurrency/PeriodicLoop.hpp",
-            "start() runs the callback on a named thread at about the rate asked, passing the measured dt; a second "
-            "start() is ignored; stop() joins and can be called twice") {
+            "start() runs the callback on a named thread at the rate asked, passing the measured dt: with a callback "
+            "that takes 3 ms of a 5 ms period the mean dt stays within 20 percent of 5 ms (absolute wake-ups, not a "
+            "sleep after the callback); a second start() is ignored; stop() joins and can be called twice") {
     Watchdog watchdog("periodic loop", 20s);
     std::atomic<int> ticks{0};
     std::atomic<int> otherTicks{0};
     std::atomic<bool> dtPositive{true};
+    double dtSum = 0.0;  // the loop's thread only; read after stop() has joined it
+    int dtCount = 0;
     std::string threadName;
     std::mutex nameMutex;
     PeriodicLoop loop("BrezelLoopTest");
@@ -332,9 +337,12 @@ BREZEL_TEST(periodic_loop_rate_and_stop, "Concurrency/PeriodicLoop.hpp",
         if (ticks.fetch_add(1) == 0) {
             std::lock_guard<std::mutex> lock(nameMutex);
             threadName = currentThreadName();
-        } else if (!(dt > 0.0)) {
-            dtPositive = false;
+        } else {
+            if (!(dt > 0.0)) dtPositive = false;
+            dtSum += dt;
+            ++dtCount;
         }
+        std::this_thread::sleep_for(3ms);  // 60 percent of the period: a relative sleep would make the period 8 ms
     });
     loop.start(1000.0, [&](double) { otherTicks.fetch_add(1); });
     CHECK(loop.isRunning());
@@ -349,6 +357,11 @@ BREZEL_TEST(periodic_loop_rate_and_stop, "Concurrency/PeriodicLoop.hpp",
     CHECK(afterStop <= 90);
     CHECK_EQ(otherTicks.load(), 0);
     CHECK(dtPositive.load());
+    REQUIRE(dtCount > 0);
+    const double meanDt = dtSum / dtCount;
+    std::printf("    mean dt %.3f ms over %d ticks\n", meanDt * 1e3, dtCount);
+    CHECK(meanDt > 0.004);
+    CHECK(meanDt < 0.006);
 #if defined(__APPLE__) || defined(__linux__)
     std::lock_guard<std::mutex> lock(nameMutex);
     CHECK_EQ(threadName, std::string("BrezelLoopTest"));  // 14 characters: within Linux's 15

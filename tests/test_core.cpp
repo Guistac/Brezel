@@ -11,6 +11,7 @@
 
 #include <cstdlib>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <thread>
@@ -47,11 +48,14 @@ bool contains(const std::vector<std::string>& v, const std::string& s) {
     return false;
 }
 
-/// Sets BREZEL_ECS_WALL=count for the projects constructed while it lives (the wall reads it at construction)
+/// Sets BREZEL_ECS_WALL=count for the projects constructed while it lives (the wall reads it at construction), then
+/// restores the value the variable had
 struct CountModeEnvironment {
-    CountModeEnvironment() { ::setenv("BREZEL_ECS_WALL", "count", 1); }
-    ~CountModeEnvironment() { ::unsetenv("BREZEL_ECS_WALL"); }
+    ScopedEnvironment variable{"BREZEL_ECS_WALL", "count"};
 };
+
+/// The exit code of the forked child whose wall aborted: its SIGABRT handler exits with it, so no crash report is written
+constexpr int kChildAbortedExit = 86;
 
 } // namespace
 
@@ -413,6 +417,32 @@ BREZEL_TEST(ecs_wall_scope_writer_waiver, "Core/EcsWall.hpp",
     CHECK(EcsWallWaiver::current() == nullptr);
 }
 
+BREZEL_TEST(ecs_wall_scope_depth, "Core/EcsWall.hpp",
+            "a thread's scope of one project is counted by depth: entering it twice and leaving once keeps it held; "
+            "leaving again ends it (the bookkeeping read()/write() call, driven directly: nesting two scopes of one "
+            "project deadlocks or is undefined behaviour on its non-recursive lock)") {
+    CountModeEnvironment countMode;
+    Project project("Depth");
+    Entity e;
+    {
+        auto w = project.write();
+        e = project.createEntity("e");
+        e.add<Position>();
+    }
+    Watchdog watchdog("scope depth thread", std::chrono::seconds(10));
+    {
+        ScopedThread t([&](const std::atomic<bool>&) {
+            project.ecsWall().enterScope();
+            project.ecsWall().enterScope();
+            project.ecsWall().leaveScope();
+            (void)e.has<Position>();  // the outer scope is still held: passes
+            project.ecsWall().leaveScope();
+            (void)e.has<Position>();  // no scope now: one violation
+        });
+    }
+    CHECK_EQ(project.ecsWall().totalViolations(), uint64_t(1));
+}
+
 BREZEL_TEST(known_defect_B10_wall_overflow_passes_all, "Core/EcsWall.hpp",
             "a thread holding scopes of more than 8 projects at once passes the wall check of every project while the "
             "overflowing scope is held (09_BREZEL.md B-10)") {
@@ -445,12 +475,15 @@ BREZEL_TEST(known_defect_B10_wall_overflow_passes_all, "Core/EcsWall.hpp",
 
 #if defined(BREZEL_TEST_HAS_FORK) && !defined(NDEBUG)
 BREZEL_TEST(ecs_wall_assert_mode_aborts, "Core/EcsWall.hpp",
-            "in a build without NDEBUG and without BREZEL_ECS_WALL=count, a violation prints the site and aborts") {
-    Project project("Abort");
-    if (project.ecsWall().mode() != EcsWall::Mode::Assert) {
-        std::printf("    skipped: BREZEL_ECS_WALL=count is set in the environment\n");
-        return;
+            "in a build without NDEBUG and without BREZEL_ECS_WALL=count, a violation prints the site and aborts (in a "
+            "forked child, whose SIGABRT handler exits with a known code)") {
+    std::optional<Project> constructed;
+    {
+        ScopedEnvironment assertMode("BREZEL_ECS_WALL", nullptr);  // the wall reads the variable at construction only
+        constructed.emplace("Abort");
     }
+    Project& project = *constructed;
+    REQUIRE(project.ecsWall().mode() == EcsWall::Mode::Assert);
     Entity e;
     {
         auto w = project.write();
@@ -460,14 +493,34 @@ BREZEL_TEST(ecs_wall_assert_mode_aborts, "Core/EcsWall.hpp",
     const pid_t child = ::fork();
     REQUIRE(child >= 0);
     if (child == 0) {
-        ::close(2);       // keep the expected abort message out of the test output
+        ::close(2);  // keep the expected abort message out of the test output
+        struct sigaction onAbort {};
+        onAbort.sa_handler = [](int) { ::_exit(kChildAbortedExit); };  // no crash report for an expected abort
+        sigemptyset(&onAbort.sa_mask);
+        ::sigaction(SIGABRT, &onAbort, nullptr);
         (void)e.has<Position>();
-        std::_Exit(0);    // not reached when the wall aborts
+        ::_exit(0);  // not reached when the wall aborts
     }
     int status = 0;
-    ::waitpid(child, &status, 0);
-    CHECK(WIFSIGNALED(status));
-    if (WIFSIGNALED(status)) CHECK_EQ(WTERMSIG(status), SIGABRT);
+    bool reaped = false;
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    for (;;) {
+        const pid_t done = ::waitpid(child, &status, WNOHANG);
+        if (done == child) {
+            reaped = true;
+            break;
+        }
+        if (done < 0) break;
+        if (std::chrono::steady_clock::now() > deadline) {
+            ::kill(child, SIGKILL);
+            ::waitpid(child, &status, 0);
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    REQUIRE(reaped);
+    CHECK(WIFEXITED(status));
+    if (WIFEXITED(status)) CHECK_EQ(WEXITSTATUS(status), kChildAbortedExit);
 }
 #endif
 

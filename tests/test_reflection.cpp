@@ -163,7 +163,7 @@ BREZEL_TEST(visitor_actions_and_defaults, "Reflection/Visitor.hpp",
 BREZEL_TEST(visitor_field_types_that_exist, "Reflection/Visitor.hpp",
             "the field types are int, float, bool, std::string, StringID, EntityReference and lists "
             "(VectorAccessorBase); double, 64-bit and unsigned integers, enums, fixed arrays and structs have no "
-            "overload (start plan section 4 row 9)") {
+            "overload (start plan section 4 row 9; compile-time: the static asserts fail the build)") {
     static_assert(canVisit<int>);
     static_assert(canVisit<float>);
     static_assert(canVisit<bool>);

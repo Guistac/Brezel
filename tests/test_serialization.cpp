@@ -486,7 +486,8 @@ BREZEL_TEST(binary_filters, "Serialization/BinaryVisitor.hpp",
 
 BREZEL_TEST(binary_mismatched_component_skipped, "Serialization/BinaryVisitor.hpp",
             "a decoder asked for another component than the one in the buffer skips that component's payload by its "
-            "length and returns false without an error; a length past the end of the buffer is an error") {
+            "length and returns false without an error; a length past the end of the buffer is an error, after which "
+            "every further component is refused without reading") {
     registerTestComponents();
     Label l{"skip me", true, StringID::from("k"), ""};
     Position p{3.0f, 4.0f, 5};
@@ -507,6 +508,15 @@ BREZEL_TEST(binary_mismatched_component_skipped, "Serialization/BinaryVisitor.hp
     BinaryDeserializer badDecoder(bad.data(), bad.size());
     CHECK(!decodeFrom(badDecoder, back, "Position"));
     CHECK(badDecoder.hasError());
+    // once the error is set the decoder refuses every further component without reading (review R-A F-2)
+    const size_t at = badDecoder.bytesRead();
+    CHECK_EQ(at, size_t(12));
+    Position after{0.0f, 0.0f, 0};
+    Label afterLabel;
+    CHECK(!decodeFrom(badDecoder, after, "Position"));
+    CHECK(!decodeFrom(badDecoder, afterLabel, "Label"));
+    CHECK_EQ(badDecoder.bytesRead(), at);
+    CHECK_EQ(after.layer, 0);
 }
 
 BREZEL_TEST(binary_payload_cut_short, "Serialization/BinaryVisitor.hpp",

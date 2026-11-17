@@ -170,8 +170,8 @@ BREZEL_TEST(accepts_local_rename_and_rename_handler, "Core/ComponentRegistry.hpp
 }
 
 BREZEL_TEST(authority_is_fixed_at_registration, "Core/ComponentRegistry.hpp",
-            "a type's authority is the one given to registerComponent, LocalOnly by default; the enum has exactly "
-            "three values, two sides and local") {
+            "a type's authority is the one given to registerComponent, LocalOnly by default; the three values are "
+            "local (0), server (1) and client (2), two sides and local") {
     registerTestComponents();
     CHECK(ComponentRegistry::componentInfoByTypeName.at(StringID::from("Position")).authority == Authority::LocalOnly);
     ComponentRegistry::registerComponent<Position>("Position", ComponentRegistry::ComponentFlag::Networked,

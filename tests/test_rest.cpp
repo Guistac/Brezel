@@ -84,10 +84,9 @@ struct CoutCapture {
     ~CoutCapture() { std::cout.rdbuf(old); }
 };
 
-/// Sets BREZEL_ECS_WALL=count for the projects constructed while it lives
+/// Sets BREZEL_ECS_WALL=count for the projects constructed while it lives, then restores the value the variable had
 struct CountModeEnvironment {
-    CountModeEnvironment() { ::setenv("BREZEL_ECS_WALL", "count", 1); }
-    ~CountModeEnvironment() { ::unsetenv("BREZEL_ECS_WALL"); }
+    ScopedEnvironment variable{"BREZEL_ECS_WALL", "count"};
 };
 
 uint64_t fnv1aBytes(const unsigned char* s, size_t n) {
@@ -511,6 +510,14 @@ BREZEL_TEST(known_defect_app_load_without_lock, "App/Application.hpp",
     const auto dir = std::filesystem::temp_directory_path();
     const auto good = dir / ("brezel_app_good_" + std::to_string(UUIDProvider::generate().value) + ".xml");
     const auto critical = dir / ("brezel_app_bad_" + std::to_string(UUIDProvider::generate().value) + ".xml");
+    struct RemoveFiles {  // on every path, a failed REQUIRE included
+        std::filesystem::path a, b;
+        ~RemoveFiles() {
+            std::error_code ignored;
+            std::filesystem::remove(a, ignored);
+            std::filesystem::remove(b, ignored);
+        }
+    } removeFiles{good, critical};
     {
         TestWorld source("Loaded Name", false);
         source.project.createEntityWithUUID(UUID(4001), "E").add<Position>(1.0f, 2.0f, 3);
@@ -538,9 +545,7 @@ BREZEL_TEST(known_defect_app_load_without_lock, "App/Application.hpp",
         CHECK(Application::loadProject(critical.string()) == nullptr);
         CHECK(Application::getActiveProject() == loaded);
     }
-    Application::closeProject(0);
-    std::filesystem::remove(good);
-    std::filesystem::remove(critical);
+    Application::closeProject(0);  // a null load adds no project, so a failed REQUIRE above leaves none open
 }
 
 BREZEL_TEST_MAIN("rest")
