@@ -112,7 +112,8 @@ private:
 };
 
 /**
- * @brief A thread that is joined on every path: the destructor sets the stop flag (the body polls it) and joins.
+ * @brief A thread that is joined on every path: the destructor sets the stop flag (the body polls it) and joins;
+ * waitForEnd() joins without setting it.
  * Thread: the test's thread owns it.
  */
 class ScopedThread {
@@ -129,8 +130,13 @@ public:
     }
     ~ScopedThread() { join(); }
     void requestStop() noexcept { m_stop.store(true, std::memory_order_release); }
+    /// Asks the body to stop, then joins
     void join() {
         requestStop();
+        if (m_thread.joinable()) m_thread.join();
+    }
+    /// Joins without asking the body to stop: waits for it to end on its own (the Watchdog bounds the wait)
+    void waitForEnd() {
         if (m_thread.joinable()) m_thread.join();
     }
     ScopedThread(const ScopedThread&) = delete;

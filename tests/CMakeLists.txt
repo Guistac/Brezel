@@ -29,6 +29,7 @@ set(BREZEL_TEST_AREAS
     reflection      # Visitor.hpp: every field type, tags, VectorAccessor, the catch-all reflect
     mutations       # AnyMutation, MutationQueue, the standard mutations, hooks, events, one tick
     serialization   # XML save and load, the load report, relink; the binary codec, filters, hostile input
+    concurrency     # TripleBuffer, RingBuffer, TriggeredCapture, PeriodicLoop, StallWatchdog, ThreadUtils
 )
 
 foreach(area IN LISTS BREZEL_TEST_AREAS)
