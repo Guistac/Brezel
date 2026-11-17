@@ -1211,7 +1211,7 @@ ThreadSanitizer the copies of `TripleBuffer::data_` are reported as races by des
 **Adding a test.** Put it in the program of its area, name the header and the behaviour, use only the test components
 or new ones of the same kind (no word of an application), and:
 - touch entities from the test's thread as the writer (`TestWorld`) or inside `read()` or `write()`; never set
-  `BREZEL_ECS_WALL=count` for a whole run (two tests set it for the projects they construct, then unset it);
+  `BREZEL_ECS_WALL=count` for a whole run (three tests set it for the projects they construct, then unset it);
 - put every thread under a `Watchdog` and in a `ScopedThread`;
 - leave the process-wide registry as you found it: call `registerTestComponents()` after registering hooks that capture
   locals, clear `ComponentRegistry::authorityRules` after adding rules;
