@@ -761,7 +761,8 @@ Generic concurrency primitives in `include/Brezel/Concurrency/` and `include/Bre
   writer applies at its next `record()`, and only the writer touches the ring and its indices, so reading while
   `FROZEN` never races a write. `freezeCount()` tells the controller a new capture is ready; `state()` is readable from
   any thread. A trigger requested before an arm does not fire it. `T` must be trivially copyable and `Capacity` at
-  least 2 (static asserts). First user: Stacato SAF-28 (D-210); tested in Stacato `tests/test_fieldbus_policy.cpp`.
+  least 2 (static asserts). First user: Stacato SAF-28 (D-210); tested in Stacato `tests/test_fieldbus_policy.cpp` and in Brezel's
+  `tests/test_concurrency.cpp` (section 14).
 - **`Brezel::StallWatchdog`** (`StallWatchdog.hpp`, 2026-10-23): detects a stalled thread from outside it. A watched
   thread calls `beat(id)` at least once per timeout (wait-free, one atomic store); the watchdog's own thread checks
   every interval (default 100 ms) and calls the listener once when an entry goes stalled and once when it beats
@@ -993,7 +994,7 @@ A runtime check of the one ECS access rule: **a thread touches entity components
 
 Header-only, C++20, thread-agnostic, no allocation and no storage of the input (Stacato D-73). Doubles throughout.
 First user: an optical calibration in Stacato (D-71, D-74 point 6); tested through Stacato's `tests/test_calibration.cpp`
-until Brezel has its own test target.
+and in Brezel's `tests/test_rest.cpp` (section 14).
 
 ### 10.1 Dense linear least squares (`LeastSquares.hpp`)
 `Brezel::Math::LeastSquares<N>` (N = 1 to 8 unknowns) folds equations in one at a time and never keeps them:

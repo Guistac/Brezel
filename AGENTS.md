@@ -11,14 +11,14 @@ has an entry in its header index (section 13).
 ## Build & Run
 - Normal use: as a subdirectory of the parent CMake project, where Brezel is an `INTERFACE` library. The parent defines
   the `spdlog` and `tinyxml2` targets and adds EnTT's include path. `README.md` has the snippet.
-- Standalone testbed (top-level build into `build/`):
+- Standalone (top-level build into `build/`): builds and registers Brezel's own tests (`tests/`, option
+  `BREZEL_BUILD_TESTS`, on by default when standalone; README "Tests"):
   ```bash
   git submodule update --init --recursive
-  cmake -S . -B build -G Ninja && cmake --build build
-  ./build/Brezel
+  cmake -S . -B build -G Ninja && cmake --build build && ctest --test-dir build --output-on-failure
   ```
-  It does not build today: `src/main.cpp:2` includes `Brezel/Command/ValueChangeCommand.hpp`, which was never
-  committed.
+  The testbed executable `src/main.cpp` is built only with `-DBREZEL_BUILD_TESTBED=ON`, and it does not build today:
+  `src/main.cpp:2` includes `Brezel/Command/ValueChangeCommand.hpp`, which was never committed.
 - Dependencies are git submodules in `extern/`: EnTT, spdlog, tinyxml2. GNU readline (system) is needed only by
   `Console/InteractiveConsole.hpp` and the testbed.
 - New `.cpp` files in `src/` are picked up by globbing. As a subdirectory, any `.cpp` other than `src/main.cpp` turns
@@ -28,7 +28,8 @@ has an entry in its header index (section 13).
 - `include/Brezel/` — the framework headers (header-only).
 - `src/main.cpp` — the standalone testbed (does not compile, see above).
 - `docs/Framework_Guide.md` — the API reference.
-- No tests in Brezel yet: the primitives are tested through the tests of the project that uses Brezel.
+- `tests/` — Brezel's own tests, one program per area, each built as C++20 and as C++23, plus a check that every header
+  compiles alone (README "Tests", guide section 14). A parent project builds them when it sets `BREZEL_BUILD_TESTS`.
 
 ## Gotchas & Conventions
 - **Domain-agnostic**: no application concept (machines, devices, venues, users of the app) in Brezel code or the

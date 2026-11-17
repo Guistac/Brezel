@@ -46,12 +46,13 @@ This was checked on 2026-11-11 with a small consumer built with CMake and Ninja.
 
 ## Standalone testbed (does not build today)
 
-Built as the top-level project, `CMakeLists.txt` compiles `src/*.cpp` into an executable named `Brezel` and links
-EnTT, spdlog, tinyxml2 and readline (`CMakeLists.txt:28-31`, `:61-72`). The commands are:
+Built as the top-level project with `-DBREZEL_BUILD_TESTBED=ON` (off by default), `CMakeLists.txt` compiles
+`src/*.cpp` into an executable named `Brezel` and links EnTT, spdlog, tinyxml2 and readline. A standalone build
+without that option builds the tests instead (section "Tests"). The commands are:
 
 ```bash
 git submodule update --init --recursive
-cmake -S . -B build -G Ninja
+cmake -S . -B build -G Ninja -DBREZEL_BUILD_TESTBED=ON
 cmake --build build
 ./build/Brezel
 ```
