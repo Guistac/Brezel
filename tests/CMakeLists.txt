@@ -31,6 +31,7 @@ set(BREZEL_TEST_AREAS
     serialization   # XML save and load, the load report, relink; the binary codec, filters, hostile input
     concurrency     # TripleBuffer, RingBuffer, TriggeredCapture, PeriodicLoop, StallWatchdog, ThreadUtils
     ownership       # replication authority, rules, the remote and local guards, RemoteMirrorTag
+    rest            # CommandStack, time, StringID, Signal, math, Console, ConsoleDebugVisitor, Application
 )
 
 foreach(area IN LISTS BREZEL_TEST_AREAS)
