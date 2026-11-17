@@ -4,7 +4,8 @@
 // Serialization: the XML round trip (entities, hierarchy, components, lists, entity references), the XML layout, what
 // the loader reports for a field or a component that is unknown or missing, the relink pass, files; the binary codec
 // round trip and layout, its filters, and hostile input: a count larger than the payload, a payload cut short, a
-// component whose reflect reads less than was written (start plan section 4 row 10; 09_BREZEL.md B-01, B-02, B-22).
+// component whose reflect reads less than was written, reading on after an error (start plan section 4 row 10;
+// 09_BREZEL.md B-01, B-02, B-22).
 // Headers: Serialization/XmlSerializer.hpp, Serialization/XmlDeserializer.hpp, Serialization/XmlCommon.hpp,
 // Serialization/EntityReferenceLinker.hpp, Serialization/DeserializationValidation.hpp,
 // Serialization/BinaryVisitor.hpp.
@@ -510,28 +511,58 @@ BREZEL_TEST(binary_mismatched_component_skipped, "Serialization/BinaryVisitor.hp
 
 BREZEL_TEST(binary_payload_cut_short, "Serialization/BinaryVisitor.hpp",
             "a buffer cut at any length is decoded without reading past its end and sets the error; the fields "
-            "decoded before the cut stay written") {
+            "decoded before the cut stay written (the payload has no string directly before a list: see "
+            "known_defect_new3_decoder_reads_after_error)") {
     registerTestComponents();
-    Lists lists{{1, 2, 3}, {"word", "other"}, {Inner{4, 5.0f}, Inner{6, 7.0f}}};
     Label label{"label text", false, StringID::from("k"), "n"};
+    Position position{1.0f, 2.0f, 3};
+    Lists lists{{1, 2, 3}, {}, {Inner{4, 5.0f}, Inner{6, 7.0f}}};
     BinarySerializer s;
     encodeInto(s, label, "Label");
+    encodeInto(s, position, "Position");
     encodeInto(s, lists, "Lists");
     const std::vector<uint8_t> full = s.takeBuffer();
     for (size_t cut = 0; cut < full.size(); ++cut) {
         std::vector<uint8_t> shortBuffer(full.begin(), full.begin() + static_cast<std::ptrdiff_t>(cut));
         BinaryDeserializer d(shortBuffer.data(), shortBuffer.size());
         Label l2;
+        Position p2;
         Lists lists2;
         const bool labelBegun = decodeFrom(d, l2, "Label");
+        if (!d.hasError()) decodeFrom(d, p2, "Position");
         if (!d.hasError()) decodeFrom(d, lists2, "Lists");
         if (!d.hasError()) BrezelTest::fail(__FILE__, __LINE__, "no error at cut " + std::to_string(cut));
         CHECK(d.bytesRead() <= cut);
+        CHECK(lists2.numbers.size() <= 3);
+        CHECK(lists2.items.size() <= 2);
         if (cut == 12 + 4 + 10 + 2) {  // inside the label's kind: text and visible were decoded
             CHECK(labelBegun);
             CHECK_EQ(l2.text, std::string("label text"));
         }
     }
+}
+
+BREZEL_TEST(known_defect_new3_decoder_reads_after_error, "Serialization/BinaryVisitor.hpp",
+            "after an error the decoder goes on: only beginComponent checks the error flag, so the next field is "
+            "read from where the failed one stopped; a string whose length check fails leaves its bytes to be read "
+            "as the next value, and a list count read that way is resized at once (B-01: in a first version of "
+            "binary_payload_cut_short, the text of a cut string became a count of 1.7 billion elements) (new finding)") {
+    std::vector<uint8_t> payload;
+    const uint32_t claimed = 10;  // a string claiming 10 bytes, of which 4 are there
+    const int32_t next = 2;
+    payload.resize(8);
+    std::memcpy(payload.data(), &claimed, 4);
+    std::memcpy(payload.data() + 4, &next, 4);
+    BinaryDeserializer d(payload.data(), payload.size());
+    std::string text = "kept";
+    std::vector<int> list;
+    VectorAccessor<int> listAccess(list);
+    d.visit_property(StringID::from("text"), text, {});
+    CHECK(d.hasError());
+    CHECK_EQ(text, std::string("kept"));
+    d.visit_property(StringID::from("list"), listAccess, {});  // reads the string's bytes as the count
+    CHECK_EQ(list.size(), size_t(2));
+    CHECK(d.hasError());
 }
 
 BREZEL_TEST(known_defect_B01_list_count_before_check, "Serialization/BinaryVisitor.hpp",
