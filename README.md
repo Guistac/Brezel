@@ -62,7 +62,7 @@ Until `src/main.cpp` is fixed, use Brezel as a subdirectory (above).
 ## Tests
 
 Brezel's tests are in `tests/`: seven programs, one per area (core, reflection, mutations, serialization,
-concurrency, ownership, the rest), 101 tests in all, and a header check. Each program is built twice, as C++20 and as
+concurrency, ownership, the rest), 102 tests in all, and a header check. Each program is built twice, as C++20 and as
 C++23, and registered with CTest as `brezel_<area>_cxx20` and `brezel_<area>_cxx23`; the header check is
 `brezel_headers_cxx20`. They need nothing beyond Brezel's own dependencies and the threads library: the small test
 framework is `tests/BrezelTest.hpp`.

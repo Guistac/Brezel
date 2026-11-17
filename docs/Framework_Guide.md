@@ -15,7 +15,7 @@ TEST-) are named where one exists.
   compiles as C++20 (checked 2026-11-11). Write C++20 only.
 - Header-only. Dependencies: EnTT (`extern/entt`, version 4.0), spdlog (`StringID` formatter, the load report),
   tinyxml2 (XML) and GNU readline (`Console/InteractiveConsole.hpp` only). How to build: `README.md`.
-- No tests in Brezel. The primitives are tested through Stacato's `tests/` (Stacato TEST-09).
+- Tests: Brezel's own, in `tests/` (section 14). Stacato's `tests/` also test some primitives through Stacato's types.
 - Eight headers do not compile on their own. Seven need `Brezel/Core/ComponentRegistry.hpp` included first (and
   `ConsoleVisitor.hpp` also `Brezel/Core/EntityReference.hpp`); `CoreComponents.hpp` is included through
   `Entity.hpp`. Section 13 lists every header.
@@ -1128,7 +1128,7 @@ on its own (checked 2026-11-11 by compiling each header alone as C++20).
 Brezel's own tests are in `tests/` (Stacato TEST-09, D-232). This section describes them as they are at the Brezel
 commit that added them (2026-11-17). How to build and run them: `README.md`, section "Tests".
 
-**What runs.** Seven programs, one per area, 101 tests in all, each program built as C++20 and as C++23
+**What runs.** Seven programs, one per area, 102 tests in all, each program built as C++20 and as C++23
 (`brezel_<area>_cxx20`, `brezel_<area>_cxx23`), and `brezel_headers_cxx20`. The header check is a build: one
 generated translation unit per public header, a header that compiles alone included twice on its own, one with an
 entry in the "First" column of section 13 after the header(s) named there, all linked into one program.
@@ -1143,6 +1143,7 @@ default; as a subdirectory: off unless the parent sets it before `add_subdirecto
   failure and never a stuck `ctest`. Every test that starts a thread holds one.
 - `ScopedThread(body)`: the destructor sets the stop flag the body polls and joins; `waitForEnd()` joins without
   setting it. A thread is joined on every path, `REQUIRE` included.
+- `ScopedEnvironment(name, value)`: sets an environment variable (unsets it for a null value) and restores what it was.
 
 **The test components** (`tests/TestComponents.hpp`): `Position` (two floats, an int), `Label` (a string, a bool, a
 `StringID`, an untagged string), `Inner` (a struct with a member `reflect`), `Nested` (a struct inside a component),
@@ -1156,11 +1157,11 @@ in the order they fire.
 
 | Area | Headers | Behaviours |
 | :-- | :-- | :-- |
-| core | `Core/Project.hpp`, `Entity.hpp`, `CoreComponents.hpp`, `UUID.hpp`, `UUIDProvider.hpp`, `EntityReference.hpp`, `EcsWall.hpp`, `ComponentRegistry.hpp` | entity creation and identity, name sanitizing, explicit UUIDs, destroy, clear, `resolveEntity`, the hierarchy and paths, FNV-1a derivation, random UUIDs, `EntityReference::set`, the checked accessors, the wall (scope, writer, waiver, site record, abort in a build without `NDEBUG`), registration, reflection over an entity, clone |
+| core | `Core/Project.hpp`, `Entity.hpp`, `CoreComponents.hpp`, `UUID.hpp`, `UUIDProvider.hpp`, `EntityReference.hpp`, `EcsWall.hpp`, `ComponentRegistry.hpp` | entity creation and identity, name sanitizing, explicit UUIDs, destroy, clear, `resolveEntity`, the hierarchy and paths, FNV-1a derivation, random UUIDs, `EntityReference::set`, the checked accessors, the wall (scope, its depth, writer, waiver, site record, abort in a build without `NDEBUG`, in a forked child whose `SIGABRT` handler exits with a known code, so no crash report is written), registration, reflection over an entity, clone |
 | reflection | `Reflection/Visitor.hpp`, `ComponentRegistry.hpp`, `StreamComponent.hpp`, `QueueComponent.hpp` | every field type and its tags in reflect order, writes through the references, actions, the base visitor's defaults, the field types that exist and those that do not (compile-time), `VectorAccessor` resize and struct elements, a nested struct, the tag helpers, the catch-all `reflect`, the channel components' read-only copies |
 | mutations | `Concurrency/AnyMutation.hpp`, `MutationQueue.hpp`, `StandardMutations.hpp`, `ComponentRegistry.hpp`, `Core/Dispatcher.hpp` | the envelope's copy, move and destruction, four producer threads into one queue, every standard mutation with its hooks and events, `SetComponent<T>` (a type registered later included), one writer tick in push order with the events inside it, listener order, attach and detach of channel components |
 | serialization | `Serialization/XmlSerializer.hpp`, `XmlDeserializer.hpp`, `XmlCommon.hpp`, `EntityReferenceLinker.hpp`, `DeserializationValidation.hpp`, `BinaryVisitor.hpp` | XML round trip and layout, missing and unknown fields and components, identity and list errors in the report, relink, files; binary round trip, byte layout, filters, skipping another component, a payload cut at every length, hostile counts |
-| concurrency | `Concurrency/TripleBuffer.hpp`, `RingBuffer.hpp`, `TriggeredCapture.hpp`, `PeriodicLoop.hpp`, `StallWatchdog.hpp`, `ThreadUtils.hpp` | each primitive's rules on one thread, then one writer thread and one reader thread (no torn value, FIFO, consecutive captures); loop rate, stop and overrun; stall and recovery by hand and on the watchdog's thread; thread names |
+| concurrency | `Concurrency/TripleBuffer.hpp`, `RingBuffer.hpp`, `TriggeredCapture.hpp`, `PeriodicLoop.hpp`, `StallWatchdog.hpp`, `ThreadUtils.hpp` | each primitive's rules on one thread, then one writer thread and one reader thread (no torn value, FIFO, consecutive captures); loop rate (the mean `dt` within 20 percent of the period with a callback taking 60 percent of it, which pins the absolute wake-ups), stop and overrun; stall and recovery by hand and on the watchdog's thread; thread names |
 | ownership | `Core/ComponentRegistry.hpp`, `CoreComponents.hpp`, `StandardMutations.hpp` | `authorityFor` and the rules, `acceptsRemoteDelta` over every sender, type authority and rule, `acceptsLocalEdit` and `acceptsLocalRename` on a mirror, the refused rename |
 | rest | `Command/*`, `Foundation/*`, `Time/RemoteClockEstimator.hpp`, `Math/*`, `Console/Console.hpp`, `SearchVisitor.hpp`, `Serialization/ConsoleVisitor.hpp`, `App/Application.hpp` | undo and redo, the raw clock, the clock estimate and the 32-bit unwrap, `StringID` (interning from two threads), `Signal`, the three fits (the QR path included), the console verbs and errors, the debug printer, `Application` |
 
@@ -1211,7 +1212,8 @@ ThreadSanitizer the copies of `TripleBuffer::data_` are reported as races by des
 **Adding a test.** Put it in the program of its area, name the header and the behaviour, use only the test components
 or new ones of the same kind (no word of an application), and:
 - touch entities from the test's thread as the writer (`TestWorld`) or inside `read()` or `write()`; never set
-  `BREZEL_ECS_WALL=count` for a whole run (three tests set it for the projects they construct, then unset it);
+  `BREZEL_ECS_WALL=count` for a whole run (four tests set it for the projects they construct with `ScopedEnvironment`,
+  which restores it; `ecs_wall_assert_mode_aborts` unsets it around its own project);
 - put every thread under a `Watchdog` and in a `ScopedThread`;
 - leave the process-wide registry as you found it: call `registerTestComponents()` after registering hooks that capture
   locals, clear `ComponentRegistry::authorityRules` after adding rules;
