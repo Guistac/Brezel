@@ -61,8 +61,37 @@ Until `src/main.cpp` is fixed, use Brezel as a subdirectory (above).
 
 ## Tests
 
-Brezel has no test target yet. Its primitives are tested through the tests of the project that uses it (Stacato's
-`tests/`).
+Brezel's tests are in `tests/`: seven programs, one per area (core, reflection, mutations, serialization,
+concurrency, ownership, the rest), 101 tests in all, and a header check. Each program is built twice, as C++20 and as
+C++23, and registered with CTest as `brezel_<area>_cxx20` and `brezel_<area>_cxx23`; the header check is
+`brezel_headers_cxx20`. They need nothing beyond Brezel's own dependencies and the threads library: the small test
+framework is `tests/BrezelTest.hpp`.
+
+Standalone, from this folder:
+
+```bash
+git submodule update --init --recursive
+cmake -S . -B build -G Ninja -DBREZEL_BUILD_TESTS=ON
+cmake --build build
+ctest --test-dir build --output-on-failure
+```
+
+`BREZEL_BUILD_TESTS` is on by default in a standalone build. Since the tests were added, a standalone build makes the
+testbed executable only with `-DBREZEL_BUILD_TESTBED=ON` (off by default, because `src/main.cpp` does not compile);
+without it, `Brezel` is an `INTERFACE` library there too.
+
+Inside a parent project, set the option before adding the folder; the tests then run in the parent's `ctest`
+(Stacato does this in `cmake/Dependencies/brezel.cmake`):
+
+```cmake
+set(BREZEL_BUILD_TESTS ON)
+add_subdirectory(deps/Brezel)
+```
+
+One program can be run alone; its first argument filters the tests by name (`./build/tests/brezel_core_cxx20 wall`).
+A test that pins a known defect of today's code is named `known_defect_<row>`: it passes while the defect is there and
+fails when the code is fixed, so the fix changes the test with it. What the tests cover, what they do not, and how to
+add one: [docs/Framework_Guide.md](docs/Framework_Guide.md) section 14.
 
 ## License
 

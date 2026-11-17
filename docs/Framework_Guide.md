@@ -1120,3 +1120,102 @@ on its own (checked 2026-11-11 by compiling each header alone as C++20).
 | `Serialization/XmlDeserializer.hpp` | XML load | 6.1 | `Core/ComponentRegistry.hpp` |
 | `Serialization/XmlSerializer.hpp` | XML save | 6.1 | `Core/ComponentRegistry.hpp` |
 | `Time/RemoteClockEstimator.hpp` | remote clock offset from one-way samples | 9.9c | |
+
+---
+
+## 14. Tests
+
+Brezel's own tests are in `tests/` (Stacato TEST-09, D-232). This section describes them as they are at the Brezel
+commit that added them (2026-11-17). How to build and run them: `README.md`, section "Tests".
+
+**What runs.** Seven programs, one per area, 101 tests in all, each program built as C++20 and as C++23
+(`brezel_<area>_cxx20`, `brezel_<area>_cxx23`), and `brezel_headers_cxx20`. The header check is a build: one
+generated translation unit per public header, a header that compiles alone included twice on its own, one with an
+entry in the "First" column of section 13 after the header(s) named there, all linked into one program.
+`InteractiveConsole.hpp` is left out (it needs GNU readline). `BREZEL_BUILD_TESTS` turns them on (standalone: on by
+default; as a subdirectory: off unless the parent sets it before `add_subdirectory`).
+
+**The framework** (`tests/BrezelTest.hpp`, no dependency):
+- `BREZEL_TEST(name, "Dir/Header.hpp", "behaviour")` declares a test; the program prints the header and the behaviour
+  with each test. `CHECK`, `CHECK_EQ`, `CHECK_NEAR` record a failure and go on (from any thread); `REQUIRE` ends the
+  test. The first argument of a program filters the tests by name.
+- `Watchdog(label, deadline)`: on expiry it prints the test and ends the process with exit code 124, so a hang is a
+  failure and never a stuck `ctest`. Every test that starts a thread holds one.
+- `ScopedThread(body)`: the destructor sets the stop flag the body polls and joins; `waitForEnd()` joins without
+  setting it. A thread is joined on every path, `REQUIRE` included.
+
+**The test components** (`tests/TestComponents.hpp`): `Position` (two floats, an int), `Label` (a string, a bool, a
+`StringID`, an untagged string), `Inner` (a struct with a member `reflect`), `Nested` (a struct inside a component),
+`Lists` (lists of ints, strings and `Inner`), `Link` (an `EntityReference`), `Scratch` (`Transient`), `Marker` (a tag
+with one field), `Opaque` (registered with no `reflect`), `Unregistered`. `registerTestComponents()` registers them.
+`TestWorld` is a `Project` and a `Dispatcher` with the standard handlers, the calling thread as the writer, and a
+destructor that clears `ComponentRegistry::s_activeProject` when it points there. `EventLog` records the three events
+in the order they fire.
+
+**What is pinned, by area.**
+
+| Area | Headers | Behaviours |
+| :-- | :-- | :-- |
+| core | `Core/Project.hpp`, `Entity.hpp`, `CoreComponents.hpp`, `UUID.hpp`, `UUIDProvider.hpp`, `EntityReference.hpp`, `EcsWall.hpp`, `ComponentRegistry.hpp` | entity creation and identity, name sanitizing, explicit UUIDs, destroy, clear, `resolveEntity`, the hierarchy and paths, FNV-1a derivation, random UUIDs, `EntityReference::set`, the checked accessors, the wall (scope, writer, waiver, site record, abort in a build without `NDEBUG`), registration, reflection over an entity, clone |
+| reflection | `Reflection/Visitor.hpp`, `ComponentRegistry.hpp`, `StreamComponent.hpp`, `QueueComponent.hpp` | every field type and its tags in reflect order, writes through the references, actions, the base visitor's defaults, the field types that exist and those that do not (compile-time), `VectorAccessor` resize and struct elements, a nested struct, the tag helpers, the catch-all `reflect`, the channel components' read-only copies |
+| mutations | `Concurrency/AnyMutation.hpp`, `MutationQueue.hpp`, `StandardMutations.hpp`, `ComponentRegistry.hpp`, `Core/Dispatcher.hpp` | the envelope's copy, move and destruction, four producer threads into one queue, every standard mutation with its hooks and events, `SetComponent<T>` (a type registered later included), one writer tick in push order with the events inside it, listener order, attach and detach of channel components |
+| serialization | `Serialization/XmlSerializer.hpp`, `XmlDeserializer.hpp`, `XmlCommon.hpp`, `EntityReferenceLinker.hpp`, `DeserializationValidation.hpp`, `BinaryVisitor.hpp` | XML round trip and layout, missing and unknown fields and components, identity and list errors in the report, relink, files; binary round trip, byte layout, filters, skipping another component, a payload cut at every length, hostile counts |
+| concurrency | `Concurrency/TripleBuffer.hpp`, `RingBuffer.hpp`, `TriggeredCapture.hpp`, `PeriodicLoop.hpp`, `StallWatchdog.hpp`, `ThreadUtils.hpp` | each primitive's rules on one thread, then one writer thread and one reader thread (no torn value, FIFO, consecutive captures); loop rate, stop and overrun; stall and recovery by hand and on the watchdog's thread; thread names |
+| ownership | `Core/ComponentRegistry.hpp`, `CoreComponents.hpp`, `StandardMutations.hpp` | `authorityFor` and the rules, `acceptsRemoteDelta` over every sender, type authority and rule, `acceptsLocalEdit` and `acceptsLocalRename` on a mirror, the refused rename |
+| rest | `Command/*`, `Foundation/*`, `Time/RemoteClockEstimator.hpp`, `Math/*`, `Console/Console.hpp`, `SearchVisitor.hpp`, `Serialization/ConsoleVisitor.hpp`, `App/Application.hpp` | undo and redo, the raw clock, the clock estimate and the 32-bit unwrap, `StringID` (interning from two threads), `Signal`, the three fits (the QR path included), the console verbs and errors, the debug printer, `Application` |
+
+**Known defects.** A test named `known_defect_<row>` pins what the code does today where that is a defect: it passes
+now and fails when the defect is fixed, so the fix changes the test in the same commit. Rows are those of Stacato's
+survey `09_BREZEL.md` section 7.1 (B-nn), Stacato tracker rows (BUG-nn), or `newN` for a defect without a row yet.
+
+| Test | Row | What it shows |
+| :-- | :-- | :-- |
+| `known_defect_B04_duplicate_uuid` | B-04 | a duplicate is not indexed; destroying it unindexes the first |
+| `known_defect_B10_wall_overflow_passes_all` | B-10 | scopes of a ninth project make every project's check pass |
+| `known_defect_B13_hierarchy_dangling_links` | B-13 | `setParent` keeps the old parent's link; `destroyEntity` leaves the child listed |
+| `known_defect_B19_writeaccess_bypasses_index` | B-19 | `WriteAccess::destroy` and `clear` leave dead handles in the index |
+| `known_defect_B20_restore_uuid_zero_indexed` | B-20 | `restoreEntity` with UUID 0 is indexed under 0 |
+| `known_defect_B21_custom_drawer_before_register` | B-21 | a drawer set first leaves an empty `reflect` that throws |
+| `known_defect_clone_outside_index` | section 4.4 | `Entity::clone` does not enter the UUID index |
+| `known_defect_B02_update_ignores_decode_error` | B-02 | a cut payload is half applied and announced |
+| `known_defect_B06_events_missing` | B-06 | add, remove, rename, clear, direct writes and clone fire no event |
+| `known_defect_B07_no_result` | B-07 | no result; an unhandled mutation and a missing target say nothing |
+| `known_defect_B08_queue_unbounded` | B-08 | no capacity and no count |
+| `known_defect_B11_active_project_is_the_last` | B-11 | a type registered later is connected to the last project only |
+| `known_defect_B01_list_count_before_check` | B-01 | 16 bytes allocate a list of a million elements |
+| `known_defect_B22_short_reflect_misaligns` | B-22 | the component length is not used; a filtered-out type has no header |
+| `known_defect_BUG155_xml_plain_list_values_lost` | BUG-155 | plain list values load as defaults |
+| `known_defect_new1_xml_struct_list_elements` | new | a list of structs loads the first element for every element |
+| `known_defect_new3_decoder_reads_after_error` | new | after an error the next field is read from a misaligned cursor |
+| `known_defect_B09_periodic_loop_drops_periods` | B-09 | missed periods are dropped silently |
+| `known_defect_BUG55_triple_buffer_read_before_write` | BUG-55 | `read()` is true before the first write |
+| `known_defect_B16_console_string_id_and_bool` | B-16 | a `StringID` property is "not found"; bools are not printed |
+| `known_defect_app_load_without_lock` | section 6.1 | `Application::loadProject` loads with no lock |
+| `known_defect_new2_string_id_char_sign` | new | a non-ASCII label hashes differently where `char` is signed and where it is unsigned |
+
+One behaviour that the code comments and Stacato's survey describe the other way round is pinned as it is: EnTT calls
+the listeners of one sink last connected first (`extern/entt/src/entt/signal/sigh.hpp:173-176`,
+`listener_order_last_connected_first`).
+
+**Not tested, and why.** `InteractiveConsole.hpp` (readline and a terminal). `Xml::loadProject` without a `<Project>`
+root (B-18: it dereferences a null element, so a test would crash). The 32-bit seed of `UUIDProvider` (B-05: it needs
+about 2^32 draws). Writer fairness of the project lock (B-17: a property of the standard library). An empty
+registered tag and the static asserts of `AnyMutation`, `StreamComponent`, `QueueComponent` and `TriggeredCapture`
+(compile errors cannot be a passing test). `PeriodicLoop` at a rate of 0. The policy and affinity
+`makeNonRealtimeThread` sets on Linux (only its return value is checked). Windows. The store-buffering fence of
+`TripleBuffer::write` (BUG-22): the two-thread test did not fail without it in one run on an Apple arm64 machine, where
+the tearing it prevents is rare; Stacato's stress test in `tests/test_stage_ecs.cpp` stays. Sanitizers are not part of
+the build; run the tests once with `-fsanitize=address,undefined` and once with `-fsanitize=thread` by hand (under
+ThreadSanitizer the copies of `TripleBuffer::data_` are reported as races by design of the four-slot algorithm).
+
+**Adding a test.** Put it in the program of its area, name the header and the behaviour, use only the test components
+or new ones of the same kind (no word of an application), and:
+- touch entities from the test's thread as the writer (`TestWorld`) or inside `read()` or `write()`; never set
+  `BREZEL_ECS_WALL=count` for a whole run (two tests set it for the projects they construct, then unset it);
+- put every thread under a `Watchdog` and in a `ScopedThread`;
+- leave the process-wide registry as you found it: call `registerTestComponents()` after registering hooks that capture
+  locals, clear `ComponentRegistry::authorityRules` after adding rules;
+- in a `reflect`, pass the tags explicitly (`{}` for none): a visitor that overrides `visit_property` loses the default
+  argument, and a visitor type passed to a templated `reflect` must not hide the overloads it does not override
+  (`using ComponentVisitor::visit_property;`);
+- for an important test, remove the line of the header that does the work, see the test fail, and restore the line.
