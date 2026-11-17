@@ -26,6 +26,7 @@ target_link_libraries(brezel_test_support INTERFACE Threads::Threads)
 
 set(BREZEL_TEST_AREAS
     core            # Project, Entity, UUID, identity, hierarchy, references, the ECS wall, the component registry
+    reflection      # Visitor.hpp: every field type, tags, VectorAccessor, the catch-all reflect
 )
 
 foreach(area IN LISTS BREZEL_TEST_AREAS)

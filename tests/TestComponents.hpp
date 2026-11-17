@@ -48,7 +48,7 @@ void reflect(Label& l, V& v) {
     v.visit_property("text", l.text, {Tag::Persistent, Tag::Networked});
     v.visit_property("visible", l.visible, {Tag::Persistent, Tag::Networked});
     v.visit_property("kind", l.kind, {Tag::Persistent});
-    v.visit_property("note", l.note);
+    v.visit_property("note", l.note, {});  // no tag; passed explicitly: overriding visitors drop the default argument
 }
 
 /// A nested struct: reflected through its own member reflect (the convention VectorAccessor needs for elements)
