@@ -1111,6 +1111,7 @@ on its own (checked 2026-11-11 by compiling each header alone as C++20).
 | `Math/CircleFit.hpp` | Kasa circle fit | 10.3 | |
 | `Math/LeastSquares.hpp` | dense least squares, Cholesky and QR | 10.1 | |
 | `Math/LineFit.hpp` | total least-squares line | 10.2 | |
+| `Net/OscWriter.hpp` | OSC 1.0 message and bundle encoder into a caller's buffer | 14 | |
 | `Reflection/Visitor.hpp` | `Tag`, `ComponentVisitor`, `VectorAccessor` | 4.1, 4.2 | |
 | `Serialization/BinaryVisitor.hpp` | binary encoder and decoder, filters | 6.3 | |
 | `Serialization/ConsoleVisitor.hpp` | `ConsoleDebugVisitor`, `printEntity`, `printProject`: print entities and components to `std::cout`, no lock | 7 | `Core/ComponentRegistry.hpp`, `Core/EntityReference.hpp` |
@@ -1120,3 +1121,64 @@ on its own (checked 2026-11-11 by compiling each header alone as C++20).
 | `Serialization/XmlDeserializer.hpp` | XML load | 6.1 | `Core/ComponentRegistry.hpp` |
 | `Serialization/XmlSerializer.hpp` | XML save | 6.1 | `Core/ComponentRegistry.hpp` |
 | `Time/RemoteClockEstimator.hpp` | remote clock offset from one-way samples | 9.9c | |
+
+---
+
+## 14. Wire formats (`Brezel/Net/`)
+
+Encoders for network protocols, written into a buffer the caller owns. No socket, no thread, no allocation: the caller
+sends the bytes. Tested through Stacato's `tests/test_osc_writer.cpp` (TEST-09).
+
+### 14.1 OSC writer (`OscWriter.hpp`)
+`Brezel::Net::OscWriter` writes one Open Sound Control 1.0 packet, a message or a bundle of messages, into a
+`std::span<std::byte>` given to its constructor. First user: Stacato's OSC Sender (D-241).
+
+What it writes:
+- the address and each string with a terminating NUL, padded with zeros to a multiple of 4 bytes;
+- the type tag string with its leading `,`, padded the same way (no tags gives `,` and three zeros);
+- `i` int32, `h` int64, `f` float32, `d` float64, all big-endian; `s` string; `T` and `F` take no argument bytes;
+- a bundle: `#bundle` and a NUL, the 8-byte big-endian time tag (1 means "immediately", the default), then each message
+  preceded by its size as a big-endian int32.
+
+The call order:
+
+```cpp
+alignas(8) std::array<std::byte, 1472> buffer;
+Brezel::Net::OscWriter w(buffer);
+w.beginMessage("/stage/agv_1/xy", "ff");     // tags without the ','
+w.addFloat(1.25f);
+w.addFloat(-0.5f);
+if (w.endMessage()) send(w.data());           // or check hasError() once at the end
+
+w.reset();
+w.beginBundle();                              // time tag 1
+// ... messages as above; each endMessage() writes the element size
+w.endBundle();
+```
+
+- The add calls follow the tags in order: `addInt32`, `addInt64`, `addFloat`, `addDouble`, `addString`, `addBool`
+  (`addBool(true)` needs a `T`, `addBool(false)` an `F`). `endMessage()` needs every tag consumed.
+- One packet holds one top-level message or one bundle; bundles do not nest. `reset()` starts the next packet.
+- An address must start with `/`. A NUL inside the address, a tag or a string is refused.
+
+The error flag:
+- Any error sets a sticky flag (`hasError()`); every later call returns false until `reset()` or a successful
+  `rewind()`. An overflow also sets `overflowed()`; the other errors are misuse: a tag mismatch, too few or too many
+  adds, a bad address, an unsupported tag, `endBundle()` without a bundle or inside a message, a nested bundle, a
+  second top-level message.
+- A failed call writes nothing, and the packet is cut back to its last complete message (the bundle header stays when
+  a bundle is open), so `size()` and `data()` never include a half-written message. The writer never writes past the
+  buffer's end.
+
+`mark()` and `rewind(mark)`: a mark is the current size, taken between messages. `rewind` cuts the packet back to it,
+closes an open message and clears the flags. A sender that splits bundles at a datagram size takes a mark before each
+message, rewinds when the message pushed the packet past the limit, ends and sends the bundle, and writes that message
+again into the next one. A mark before an open bundle's header closes the bundle; a mark inside the header or past
+`size()` is refused (false, no flag set).
+
+The OSC 1.0 subset: the seven types above and bundles one level deep. Not written: blobs `b`, MIDI `m`, time tags as
+arguments `t`, symbols, characters, colours, nil, infinitum, arrays, nested bundles. No reader: Stacato's tests decode
+through tinyosc, a test-only dependency that Brezel never includes.
+
+Threads: none of its own; one writer is used by one thread at a time. No allocation, no exception, no system call, so
+it may run on a real-time thread.
