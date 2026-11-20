@@ -456,6 +456,39 @@ the old value.
   (section 8.1). It uses the `Entity` it is given.
 - A hook that must reach an RT loop writes a payload into a channel (section 8.3); it never shares the component.
 
+### 4.6 Reading one field by name (`Reflection/FieldReader.hpp`)
+Reads one field of one component of an entity, named at run time: the component by its saved name, the field by its
+reflect key (both are the save format, so a binding saved by these names survives a reload). Written for Stacato's OSC
+Sender (Stacato D-242), which lets the owner pick any component field as a value to send.
+
+```cpp
+std::optional<Brezel::FieldValue> v = Brezel::readComponentField(entity, "Pose2D", "x");
+if (v && v->kind == Brezel::FieldKind::FLOAT) use(v->number);
+std::vector<Brezel::FieldInfo> fields = Brezel::listComponentFields(entity, "Pose2D");  // name, kind, ReadOnly, Persistent
+std::vector<Brezel::StringID> components = Brezel::listEntityComponents(entity);      // IdentityComponent left out
+```
+
+- **Kinds**: `FieldKind::INT`, `FLOAT`, `BOOL` (in `number`, a bool as 1 or 0) and `STRING` (in `text`). A field
+  reflected through a temporary (a `uint32_t` copied into an `int`, a `char` array into a `std::string`) reads as that
+  temporary. `StringID`, `EntityReference` and list properties are skipped. A `Hidden` field is neither read nor
+  listed. When two properties share a key, the first visited wins.
+- **nullopt** when the entity is not valid, the type is not registered, the entity lacks the component, or no readable
+  field has the key.
+- **Nothing created, nothing sent.** The read goes through `componentInfoByTypeName`, `hasComponent` and the type's
+  `reflect` (through `try_get`). It never calls `addReflectEntityComponent` (which creates a missing component,
+  `ComponentRegistry.hpp:366`), never dispatches, never calls `onUpdated`.
+- **Values handed back unchanged.** A reflect function writes back what it visits: a clamp through a temporary, a list
+  resized to the count the visitor returns. The reader's visitor never assigns, and never visits list elements, so a
+  component whose values are in their ranges is bit-identical after a read. A component holding a value its own reflect
+  would normalise (a NaN rate, a count past a cap) is normalised by the read, as by any visit.
+- **Thread.** Because the reflect writes the values back, the caller needs exclusive world access to the entity (the
+  project's `write()` scope, or the writer thread), not a shared `read()` scope: two readers would write the same
+  bytes at once. A GUI that needs the field list copies the component into a registry it owns under a short `read()`
+  (`info.copyComponent`) and lists the copy.
+- **Cost.** One reflect of the whole component per call, with the key strings its reflect builds. Fine for a picker and
+  for a few hundred reads per tick; not for an RT loop (which never touches the ECS, section 1).
+- Tested through Stacato's `tests/test_field_reader.cpp` (TEST-09).
+
 ---
 
 ## 5. State Mutation & The Command Stack
@@ -1112,6 +1145,7 @@ on its own (checked 2026-11-11 by compiling each header alone as C++20).
 | `Math/LeastSquares.hpp` | dense least squares, Cholesky and QR | 10.1 | |
 | `Math/LineFit.hpp` | total least-squares line | 10.2 | |
 | `Net/OscWriter.hpp` | OSC 1.0 message and bundle encoder into a caller's buffer | 14 | |
+| `Reflection/FieldReader.hpp` | read one component field by saved name and key; list fields and components | 4.6 | |
 | `Reflection/Visitor.hpp` | `Tag`, `ComponentVisitor`, `VectorAccessor` | 4.1, 4.2 | |
 | `Serialization/BinaryVisitor.hpp` | binary encoder and decoder, filters | 6.3 | |
 | `Serialization/ConsoleVisitor.hpp` | `ConsoleDebugVisitor`, `printEntity`, `printProject`: print entities and components to `std::cout`, no lock | 7 | `Core/ComponentRegistry.hpp`, `Core/EntityReference.hpp` |
